@@ -1,0 +1,8 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+# An example file can be found here:
+# https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
+#
+# I read somewhere you can configure setuptools from setup.py and this is what I'm doing
