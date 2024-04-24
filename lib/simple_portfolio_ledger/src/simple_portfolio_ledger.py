@@ -88,7 +88,7 @@ class SimplePortfolioLedger:
     @classmethod
     def get_ledger_columns(cls):
         return cls._ledger_columns
-    
+
     @classmethod
     def whatis(cls, columns=None):
         """Small function to return information about different parts of the data.
@@ -98,18 +98,18 @@ class SimplePortfolioLedger:
 
         Returns:
             _type_: _description_
-        """        
+        """
         if columns != None:
             if type(columns) == list:
                 to_return = []
                 for col in columns:
                     to_return.append({
-                        col: cls._ledger_columns_attrs['column notes'].get(col, 'NOT DEFINED')
+                        col: cls._ledger_columns_attrs['column notes'].get(
+                            col, 'NOT DEFINED')
                     })
                 return to_return
             elif type(columns) == str:
                 return cls._ledger_columns_attrs['column notes'].get(columns, 'NOT DEFINED')
-
 
     @classmethod
     def _create_empty_ledger_df(cls):
@@ -193,16 +193,17 @@ class SimplePortfolioLedger:
             return to_return.drop(columns='instrument')
 
     # TODO: This needs to also group by account since the same instrument in different accounts has different cumsums
-    def cols_operation_cumsum(self, instrument=False):
+    def cols_operation_cumsum(self, show_inst_acc=False):
         """
         Add one column per operation but do a cumsum per instrument/operation.
         """
 
         if len(self._ledger_df) == 0:
             return None
-        
+
         # Create groups by instrument/operation
-        groups = self._ledger_df.groupby(['instrument', 'operation'])
+        groups = self._ledger_df.groupby(
+            ['operation', 'instrument', 'account'])
 
         # For each group do a cumsum for the size
         groups_cumsum = groups.apply(
@@ -220,13 +221,14 @@ class SimplePortfolioLedger:
             .unstack('operation')
             # Rename created columns
             .rename(columns=rename_dict)
-            # Move index instrument to a column
-            .reset_index('instrument')
-            .groupby('instrument')
+            # Move index 'instrument' and 'account' to a column
+            .reset_index(['instrument', 'account'])
+            # Regroup by instrument to do the ffill
+            .groupby(['instrument', 'account'])
             # For each instrument, ffill with the cumsum, fill with 0 the beginning
             .apply(lambda x: x.ffill().fillna(0), include_groups=False)
-            # Move index instrument created by the last groupby to a column
-            .reset_index('instrument')
+            # Move indexes 'instrument' and 'account' created by the last groupby to a column
+            .reset_index(['instrument', 'account'])
             # Create new colums
             .assign(
                 # sum of all cumsum columns
@@ -239,10 +241,10 @@ class SimplePortfolioLedger:
             .sort_index()
         )
 
-        if instrument is True:
-            return to_return
-        else:
-            return to_return.drop(columns='instrument')
+        if show_inst_acc is False:
+            to_return.drop(columns=['instrument', 'account'], inplace=True)
+
+        return to_return
 
     @staticmethod
     def _cols_operation_balance_by_instrument_for_group(group_df, new_columns):
@@ -269,8 +271,11 @@ class SimplePortfolioLedger:
             idx, info = row
 
             # Copy previous operation balance (in next steps the current operation will be changed)
+            #   This is necessary as some operations don't touch every new column
+            #   and this assures the untouched operations keep track of history
             df.loc[idx, prev_operation_columns] = prev_operation_balance
 
+            # TODO DELETE
             # Some operations below like:
             #     df.loc[idx, 'balance buy'] = df.loc[idx, 'balance buy'] + df.loc[idx, 'size']
             # Use the previous values set with the above code:
@@ -286,15 +291,16 @@ class SimplePortfolioLedger:
 
             if info['operation'] == 'deposit':
                 df.loc[idx, 'balance deposit'] = (
-                    df.loc[idx, 'balance deposit'] + df.loc[idx, 'size']
+                    prev_operation_balance['balance deposit'] +
+                    df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'buy':
                 df.loc[idx, 'balance buy'] = (
-                    df.loc[idx, 'balance buy'] + df.loc[idx, 'size']
+                    prev_operation_balance['balance buy'] + df.loc[idx, 'size']
                 )
                 df.loc[idx, 'balance buy total payed'] = (
-                    df.loc[idx, 'balance buy total payed']
+                    prev_operation_balance['balance buy total payed']
                     + df.loc[idx, 'stated_total']
                 )
                 df.loc[idx, 'avg buy total price'] = (
@@ -304,12 +310,13 @@ class SimplePortfolioLedger:
 
             elif info['operation'] == 'dividend':
                 df.loc[idx, 'balance dividend'] = (
-                    df.loc[idx, 'balance dividend'] + df.loc[idx, 'size']
+                    prev_operation_balance['balance dividend'] +
+                    df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'stock dividend':
                 df.loc[idx, 'balance stock dividend'] = (
-                    df.loc[idx, 'balance stock dividend'] +
+                    prev_operation_balance['balance stock dividend'] +
                     df.loc[idx, 'size']
                 )
 
@@ -318,79 +325,83 @@ class SimplePortfolioLedger:
                 # withdraw is negative, use absolute
                 withdrew = abs(df.loc[idx, 'size'])
 
-                if withdrew > 0 and df.loc[idx, 'balance deposit'] > 0:
-                    if withdrew > df.loc[idx, 'balance deposit']:
-                        withdrew -= df.loc[idx, 'balance deposit']
+                if withdrew > 0 and prev_operation_balance['balance deposit'] > 0:
+                    if withdrew > prev_operation_balance['balance deposit']:
+                        withdrew = withdrew - prev_operation_balance['balance deposit']
                         df.loc[idx, 'balance deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] -= withdrew
+                        df.loc[idx, 'balance deposit'] = prev_operation_balance['balance deposit'] - withdrew
                         withdrew = 0
-                if withdrew > 0 and df.loc[idx, 'balance stock dividend'] > 0:
-                    if withdrew > df.loc[idx, 'balance stock dividend']:
-                        withdrew -= df.loc[idx, 'balance stock dividend']
+                if withdrew > 0 and prev_operation_balance['balance stock dividend'] > 0:
+                    if withdrew > prev_operation_balance['balance stock dividend']:
+                        withdrew = withdrew - prev_operation_balance['balance stock dividend']
                         df.loc[idx, 'balance stock dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] -= withdrew
+                        df.loc[idx, 'balance stock dividend'] = prev_operation_balance['balance stock dividend'] - withdrew
                         withdrew = 0
-                if withdrew > 0 and df.loc[idx, 'balance dividend'] > 0:
-                    if withdrew > df.loc[idx, 'balance dividend']:
-                        withdrew -= df.loc[idx, 'balance dividend']
+                if withdrew > 0 and prev_operation_balance['balance dividend'] > 0:
+                    if withdrew > prev_operation_balance['balance dividend']:
+                        withdrew = withdrew - prev_operation_balance['balance dividend']
                         df.loc[idx, 'balance dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] -= withdrew
+                        df.loc[idx, 'balance dividend'] = prev_operation_balance['balance dividend'] - withdrew
                         withdrew = 0
                 if withdrew > 0:
-                    df.loc[idx, 'balance buy'] -= withdrew
-                    df.loc[idx, 'balance buy total payed'] -= (
-                        withdrew * df.loc[idx, 'avg buy total price']
+                    df.loc[idx, 'balance buy'] = prev_operation_balance['balance buy'] - withdrew
+                    df.loc[idx, 'balance buy total payed'] = (
+                        prev_operation_balance['balance buy total payed'] -
+                        withdrew * prev_operation_balance['avg buy total price']
                     )
-                    if df.loc[idx, 'balance buy'] > 0:
-                        df.loc[idx, 'avg buy total price'] = (
-                            df.loc[idx, 'balance buy total payed']
-                            / df.loc[idx, 'balance buy']
-                        )
-                    else:
-                        df.loc[idx, 'avg buy total price'] = pd.NA
-                # WARNING:
+
+                    # if df.loc[idx, 'balance buy'] > 0:
+                    #     df.loc[idx, 'avg buy total price'] = (
+                    #         df.loc[idx, 'balance buy total payed']
+                    #         / df.loc[idx, 'balance buy']
+                    #     )
+                    # else:
+                    #     df.loc[idx, 'avg buy total price'] = pd.NA
+
+                # TODO WARNING:
                 # There should be a final review, if withdraw is more than what I have, deposit should have a negative number to show an over withdraw or sell
 
             elif info['operation'] == 'sell':
-                # withdraw takes money if available from this in this order: [deposit, stock dividend, dividend, buy]
-                # withdraw is negative, use absolute
+                # sell takes money if available from this in this order: [deposit, stock dividend, dividend, buy]
+                # sell is negative, use absolute
                 sold = abs(df.loc[idx, 'size'])
 
-                if sold > 0 and df.loc[idx, 'balance deposit'] > 0:
-                    if sold > df.loc[idx, 'balance deposit']:
-                        sold -= df.loc[idx, 'balance deposit']
+                if sold > 0 and prev_operation_balance['balance deposit'] > 0:
+                    if sold > prev_operation_balance['balance deposit']:
+                        sold = sold - prev_operation_balance['balance deposit']
                         df.loc[idx, 'balance deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] -= sold
+                        df.loc[idx, 'balance deposit'] = prev_operation_balance['balance deposit'] - sold
                         sold = 0
-                if sold > 0 and df.loc[idx, 'balance stock dividend'] > 0:
-                    if sold > df.loc[idx, 'balance stock dividend']:
-                        sold -= df.loc[idx, 'balance stock dividend']
+                if sold > 0 and prev_operation_balance['balance stock dividend'] > 0:
+                    if sold > prev_operation_balance['balance stock dividend']:
+                        sold = sold - prev_operation_balance['balance stock dividend']
                         df.loc[idx, 'balance stock dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] -= sold
+                        df.loc[idx, 'balance stock dividend'] = prev_operation_balance['balance stock dividend'] - sold
                         sold = 0
-                if sold > 0 and df.loc[idx, 'balance dividend'] > 0:
-                    if sold > df.loc[idx, 'balance dividend']:
-                        sold -= df.loc[idx, 'balance dividend']
+                if sold > 0 and prev_operation_balance['balance dividend'] > 0:
+                    if sold > prev_operation_balance['balance dividend']:
+                        sold = sold - prev_operation_balance['balance dividend']
                         df.loc[idx, 'balance dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] -= sold
+                        df.loc[idx, 'balance dividend'] = prev_operation_balance['balance dividend'] - sold
                         sold = 0
                 if sold > 0:
-                    df.loc[idx, 'balance buy'] -= sold
-                    df.loc[idx, 'balance buy total payed'] -= (
-                        sold * df.loc[idx, 'avg buy total price']
+                    df.loc[idx, 'balance buy'] = prev_operation_balance['balance buy'] - sold
+                    df.loc[idx, 'balance buy total payed'] = (
+                        prev_operation_balance['balance buy total payed'] -
+                        sold * prev_operation_balance['avg buy total price']
                     )
 
                     # # Compute profit or loss
                     # sold_total_price = df.loc[idx, 'stated_total'] / df.loc[idx, 'size'] # Including commission and tax
                     profit_loss = (
                         sold * df.loc[idx, 'price_w_expenses']
-                        - sold * df.loc[idx, 'avg buy total price']
+                        - sold * prev_operation_balance['avg buy total price']
                     )
                     df.loc[idx, 'sell profit loss'] = profit_loss
 
@@ -416,7 +427,7 @@ class SimplePortfolioLedger:
         return df
 
     # TODO: This needs to also group by account since the same instrument in different accounts has different balances
-    def cols_operation_balance_by_instrument(self, instrument=False):
+    def cols_operation_balance_by_instrument(self, show_inst_acc=False):
 
         if len(self._ledger_df) == 0:
             return None
@@ -439,8 +450,9 @@ class SimplePortfolioLedger:
 
         groups = (self
                   ._ledger_df
-                  [['operation', 'instrument', 'price_w_expenses', 'size', 'stated_total']]
-                  .groupby('instrument'))
+                  [['operation', 'instrument', 'price_w_expenses',
+                      'size', 'stated_total', 'account']]
+                  .groupby(['instrument', 'account']))
 
         to_return = (
             groups.apply(
@@ -448,23 +460,23 @@ class SimplePortfolioLedger:
                 include_groups=False,
                 new_columns=new_columns,
             )
-            # Move index instrument created by the last groupby to a column
-            .reset_index('instrument')
+            # Move indexes 'instrument' and 'account' created by the last groupby to a column
+            .reset_index(['instrument', 'account'])
             .sort_index()
         )
 
-        if instrument is True:
-            return to_return[['instrument', *new_columns]]
+        if show_inst_acc is True:
+            return to_return[['instrument', 'account', *new_columns]]
         else:
             return to_return[[*new_columns]]
-        
+
     def rm_empty_rows(self):
         # Remove empty rows (where everything is filled with na)
         self._ledger_df.drop(
             self._ledger_df[self._ledger_df.isna().all(axis=1)].index,
             inplace=True
         )
-        
+
     # *****************
     # Ledger Operations
     # *****************
@@ -494,8 +506,8 @@ class SimplePortfolioLedger:
             notes='',
             commission_notes='',
             tax_notes='',
-            ):
-        
+    ):
+
         # TODO:
         #   - If there was a cost for deposit/withdraw it should be stated as another operation
         #   - A deposit/withdraw shouldn't have a commission/tax because the cost is in another op, see above
@@ -504,13 +516,14 @@ class SimplePortfolioLedger:
         #       - instrument_type
         #   - There should be cost operations, probably with a 'pay_' prefix:
         #       - pay_deposit
-        #       - pay_withdraw 
+        #       - pay_withdraw
         #       - pay_tax
         #       - pay_transfer
 
         price = 1
         price_w_expenses = stated_total / size
-        Q_price_commission_tax_verification = stated_total - (size * price + commission + tax)
+        Q_price_commission_tax_verification = stated_total - \
+            (size * price + commission + tax)
         new_deposit_row = {
             'date_execution': date_execution,
             'operation': 'deposit',
