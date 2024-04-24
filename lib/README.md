@@ -1,4 +1,3 @@
-This is the full project description.
 
 
 
