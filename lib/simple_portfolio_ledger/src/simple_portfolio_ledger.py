@@ -1,5 +1,37 @@
 import pandas as pd
 import datetime
+import functools
+import warnings
+import inspect
+
+"""
+Notes:
+- MARK is a functionality from Visual Studio Code to find things in the minimap.
+"""
+
+# TODO
+_ = '''
+- For all operations
+    - Add type validation
+    - Create some kind of enum to define
+        - instrument_type
+- Deposit/withdraw
+    - If there's a cost should be stated as another operation
+    - No commission/tax, add another op for that
+    - Only an amount should be deposited or withdrew
+IDEAS: 
+- There should be cost operations, probably with a 'pay_' prefix:
+    - pay_deposit
+    - pay_withdraw
+    - pay_tax
+    - pay_transfer
+    - account_cost
+- Maybe add a new column for operation id and sub id?
+    - For instance, a sell is an univest and a sell, so both ops should have an id
+        e.g. 132 and maybe a sub id 1 and 2
+        these could go on different columns or in one column (132-1 and 132-2)
+- Maybe date_execution and date_order could be datetime instead of only date
+'''
 
 
 class SimplePortfolioLedger:
@@ -12,7 +44,7 @@ class SimplePortfolioLedger:
     # # Basic
     # 'date_execution', 'date_order',
     # 'operation',
-    # 'instrument_type', 'name', 'instrument', 'origin', 'destination',
+    # 'instrument_type', 'instrument_name', 'instrument', 'origin', 'destination',
     # 'price_in', 'price', 'price_w_expenses', 'size', 'commission', 'tax', 'stated_total',
     # 'commission_notes', 'tax_notes',
     # # Additional
@@ -23,7 +55,7 @@ class SimplePortfolioLedger:
     # 'Q_price_commission_tax_verification',
     #
     # Should be the same columns as above but in a different order, more logical order
-    _ledger_columns = [
+    _ledger_columns = (
         'date_execution',
         'operation',
         'instrument',
@@ -37,7 +69,7 @@ class SimplePortfolioLedger:
         'tax',
         'stated_total',
         'date_order',
-        'name',
+        'instrument_name',
         'instrument_type',
         'description',
         'notes',
@@ -45,7 +77,7 @@ class SimplePortfolioLedger:
         'tax_notes',
         'account',
         'Q_price_commission_tax_verification',
-    ]
+    )
 
     # TODO: review attrs
     # Column description in a dict
@@ -61,7 +93,7 @@ class SimplePortfolioLedger:
             #
             'operation': 'Can be: buy, sell, deposit (for account), withdraw (for account)',
             'instrument_type': 'For example: cash, stock, mutual fund, etf, etc..',
-            'name': 'Instrument name.',
+            'instrument_name': 'Instrument name.',
             'instrument': 'Instrument code (USD, CLP, COP, AAPL, AMZN).',
             'origin': 'Where did the resource come from.',
             'destination': 'Where did the resource go.',
@@ -82,8 +114,44 @@ class SimplePortfolioLedger:
         }
     }
 
+    _ops_names = set(('buy', 'deposit', 'dividend', 'invest',
+                     'sell', 'stock dividend', 'uninvest', 'withdraw'))
+
     def __init__(self) -> None:
         self._ledger_df = self._create_empty_ledger_df()
+
+    # *****************
+    # Decorators
+    # MARK: Decorators
+    # *****************
+
+    @staticmethod
+    def _deco_check_ledger_for_cols(func):
+        # https://stackoverflow.com/a/72563047/1071459
+        deco_name = inspect.stack()[0].function
+
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+
+            if len(self._ledger_df) == 0:
+                warnings.warn(
+                    f'WARNING: Ledger is empty, no columns computed, showing only basic column structure. (Warning issued by decorator [{deco_name}])', stacklevel=2)
+                # return None
+
+            extraneous_ops = self._get_extraneous_ops()
+            if len(extraneous_ops) > 0:
+                raise ValueError(
+                    'One or more forbidden operations were inserted in the ledger.',
+                    extraneous_ops)
+
+            return func(self, *args, **kwargs)
+
+        return wrapper
+
+    # *****************
+    # Classmethods
+    # MARK: Classmethods
+    # *****************
 
     @classmethod
     def get_ledger_columns(cls):
@@ -128,6 +196,19 @@ class SimplePortfolioLedger:
         ledger.drop(ledger.index, inplace=True)
 
         return ledger
+    
+    def _get_extraneous_ops(self):
+        # Compute extraneous_ops, which shows all unique operations from self._ledger_df
+        #   minus all operations self._ops_names
+        #   leaving operations that shouldn't be here
+        used_ops = set(self._ledger_df['operation'].unique())
+        extraneous_ops = used_ops - set(self._ops_names)
+        return extraneous_ops
+
+    # *****************
+    # Computing operations
+    # MARK: Computing Operations
+    # *****************
 
     def ledger(
             self,
@@ -138,8 +219,8 @@ class SimplePortfolioLedger:
             thousands_fmt_decimals=1
     ):
         if len(self._ledger_df) == 0:
-            print('WARNING: Ledger is empty, showing only basic structure.')
-            return self._ledger_df
+            warnings.warn(
+                'WARNING: Ledger is empty, showing only basic structure.')
         dfs_toconcat = [self._ledger_df]
         if cols_operation is True:
             dfs_toconcat.append(self.cols_operation())
@@ -148,7 +229,16 @@ class SimplePortfolioLedger:
         if cols_operation_balance_by_instrument is True:
             dfs_toconcat.append(self.cols_operation_balance_by_instrument())
 
-        to_return = pd.concat(dfs_toconcat, join='inner', axis=1)
+        to_return = (pd
+                     .concat(dfs_toconcat, join='inner', axis=1)
+                     .convert_dtypes(
+                         convert_string=False
+                     )
+                     .astype({
+                         'date_execution': 'datetime64[s]',
+                         'date_order': 'datetime64[s]',
+                     })
+                     )
 
         if thousands_fmt_sep is True:
             return (to_return
@@ -158,21 +248,20 @@ class SimplePortfolioLedger:
         else:
             return to_return
 
-    def cols_operation(self, instrument=False):
+    @_deco_check_ledger_for_cols
+    def cols_operation(self, show_instr_accnt=False):
         """Returns a dataframe with 1 column per operation.
 
         Args:
-            instrument (bool, optional): Whether or not to show the instrument. Defaults to False.
+            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
 
         Returns:
             pd.DataFrame: Returns a dataframe with 1 column per operation.
         """
 
-        if len(self._ledger_df) == 0:
-            return None
-
         # Create groups by instrument/operation
-        groups = self._ledger_df.groupby(['instrument', 'operation'])
+        groups = self._ledger_df.groupby(
+            ['instrument', 'account', 'operation'])
 
         # For each group, return the size (for example if an op is buy, the column buy would be filled, not all others)
         groups_opsize = groups.apply(lambda x: x['size'], include_groups=False)
@@ -181,25 +270,28 @@ class SimplePortfolioLedger:
             groups_opsize
             # Move operation from the index and create one column for each op
             .unstack('operation')
-            # Move index instrument created by the last groupby to a column
-            .reset_index('instrument')
+            # Add columns that weren't created in the previous operation
+            #   using the operation list from the class self._ops_names
+            .reindex(sorted(self._ops_names), axis=1, fill_value=0)
+            # Convert to the best possible dtypes using dtypes supporting pd.NA
+            .convert_dtypes(convert_string=False)
+            # Fill na with 0
             .fillna(0)
+            # Move index instrument created by the last groupby to a column
+            .reset_index(['instrument', 'account'])
             .sort_index()
         )
 
-        if instrument is True:
+        if show_instr_accnt is True:
             return to_return
         else:
-            return to_return.drop(columns='instrument')
+            return to_return.drop(columns=['instrument', 'account'])
 
-    # TODO: This needs to also group by account since the same instrument in different accounts has different cumsums
-    def cols_operation_cumsum(self, show_inst_acc=False):
+    @_deco_check_ledger_for_cols
+    def cols_operation_cumsum(self, show_instr_accnt=False):
         """
         Add one column per operation but do a cumsum per instrument/operation.
         """
-
-        if len(self._ledger_df) == 0:
-            return None
 
         # Create groups by instrument/operation
         groups = self._ledger_df.groupby(
@@ -210,15 +302,21 @@ class SimplePortfolioLedger:
             lambda x: x['size'].cumsum(), include_groups=False)
 
         # Used to remane the colums
-        ops_names = groups_cumsum.unstack('operation').columns
-        ops_cumsum_names = [f'cumsum {c}' for c in ops_names]
-        rename_dict = dict(zip(ops_names, ops_cumsum_names))
+        ops_cumsum_names = [f'cumsum {c}' for c in self._ops_names]
+        rename_dict = dict(zip(self._ops_names, ops_cumsum_names))
 
         # Actual processing
         to_return = (
             groups_cumsum
             # Move operation from the index and create one column for each op
             .unstack('operation')
+            # Add columns that weren't created in the previous operation
+            #   using the operation list from the class self._ops_names
+            .reindex(sorted(self._ops_names), axis=1, fill_value=0)
+            # Convert to the best possible dtypes using dtypes supporting pd.NA
+            .convert_dtypes(convert_string=False)
+            # Fill na with 0
+            .fillna(0)
             # Rename created columns
             .rename(columns=rename_dict)
             # Move index 'instrument' and 'account' to a column
@@ -241,7 +339,7 @@ class SimplePortfolioLedger:
             .sort_index()
         )
 
-        if show_inst_acc is False:
+        if show_instr_accnt is False:
             to_return.drop(columns=['instrument', 'account'], inplace=True)
 
         return to_return
@@ -259,7 +357,7 @@ class SimplePortfolioLedger:
         df[new_columns] = 0.0
 
         prev_operation_columns = new_columns.copy()
-        # Remove from columns values that shouldn't be passed to the next line doing
+        # Remove from columns values that shouldn't be passed to the line:
         #   `prev_operation_balance = df[prev_operation_columns].iloc[0]`
         for coltoremove in ('sell profit loss', 'balance sell profit loss'):
             idxtoremove = prev_operation_columns.index(coltoremove)
@@ -273,21 +371,16 @@ class SimplePortfolioLedger:
             # Copy previous operation balance (in next steps the current operation will be changed)
             #   This is necessary as some operations don't touch every new column
             #   and this assures the untouched operations keep track of history
+            #    used in conjunction with
+            #       - The line outside this loop:
+            #            `prev_operation_balance = df[prev_operation_columns].iloc[0]`
+            #       - The last line from this loop:
+            #           `prev_operation_balance = df.loc[idx, prev_operation_columns]`
             df.loc[idx, prev_operation_columns] = prev_operation_balance
 
-            # TODO DELETE
-            # Some operations below like:
-            #     df.loc[idx, 'balance buy'] = df.loc[idx, 'balance buy'] + df.loc[idx, 'size']
-            # Use the previous values set with the above code:
-            #     df.loc[idx, prev_operation_columns] = prev_operation_balance
-
-            # invest and uninvest should not add to any column as they are using the available instruments from a pool
-            #   every dollar is equal. And for profit it's only important to know how much of a instrument was sold with a profit
-            # elif info['operation'] == 'invest':
-            #     df.loc[idx, 'invest'] = df.loc[idx, 'invest'] + df.loc[idx, 'size']
-            # elif info['operation'] == 'uninvest':
-            #     # For uninvest it should reduce the invest column
-            #     df.loc[idx, 'invest'] = df.loc[idx, 'invest'] + df.loc[idx, 'size']
+            # invest and uninvest should not be part of the balance
+            #   the invested balance is computed in `cols_operation_cumsum`, this applies to:
+            # `info['operation'] == 'invest'` and `info['operation'] == 'uninvest'`
 
             if info['operation'] == 'deposit':
                 df.loc[idx, 'balance deposit'] = (
@@ -353,14 +446,6 @@ class SimplePortfolioLedger:
                         withdrew * prev_operation_balance['avg buy total price']
                     )
 
-                    # if df.loc[idx, 'balance buy'] > 0:
-                    #     df.loc[idx, 'avg buy total price'] = (
-                    #         df.loc[idx, 'balance buy total payed']
-                    #         / df.loc[idx, 'balance buy']
-                    #     )
-                    # else:
-                    #     df.loc[idx, 'avg buy total price'] = pd.NA
-
                 # TODO WARNING:
                 # There should be a final review, if withdraw is more than what I have, deposit should have a negative number to show an over withdraw or sell
 
@@ -414,7 +499,6 @@ class SimplePortfolioLedger:
                     df.loc[idx, 'balance buy total payed']
                     / df.loc[idx, 'balance buy']
                 )
-            # df.loc[idx, 'cumsum sell profit loss'] = df.loc[idx, 'cumsum sell profit loss'] + profit_loss
 
             # TODO: WARNING:
             # There should be a final review, if withdraw is more than what I have, deposit should have a negative number to show an over withdraw or sell
@@ -426,11 +510,8 @@ class SimplePortfolioLedger:
 
         return df
 
-    # TODO: This needs to also group by account since the same instrument in different accounts has different balances
-    def cols_operation_balance_by_instrument(self, show_inst_acc=False):
-
-        if len(self._ledger_df) == 0:
-            return None
+    @_deco_check_ledger_for_cols
+    def cols_operation_balance_by_instrument(self, show_instr_accnt=False):
 
         # Name not definitely defined: 'balance buy total payed' should represent the amount used to buy an instrument, for instance how much clp where used to buy USD
         new_columns = [
@@ -451,7 +532,7 @@ class SimplePortfolioLedger:
         groups = (self
                   ._ledger_df
                   [['operation', 'instrument', 'price_w_expenses',
-                      'size', 'stated_total', 'account']]
+                    'size', 'stated_total', 'account']]
                   .groupby(['instrument', 'account']))
 
         to_return = (
@@ -460,12 +541,19 @@ class SimplePortfolioLedger:
                 include_groups=False,
                 new_columns=new_columns,
             )
+            # Add columns that weren't created in the previous operation
+            #   using the columns from `new_columns`
+            .reindex(new_columns, axis=1, fill_value=0)
+            # Convert to the best possible dtypes using dtypes supporting pd.NA
+            .convert_dtypes(convert_string=False)
+            # Fill na with 0
+            .fillna(0)
             # Move indexes 'instrument' and 'account' created by the last groupby to a column
             .reset_index(['instrument', 'account'])
             .sort_index()
         )
 
-        if show_inst_acc is True:
+        if show_instr_accnt is True:
             return to_return[['instrument', 'account', *new_columns]]
         else:
             return to_return[[*new_columns]]
@@ -479,76 +567,60 @@ class SimplePortfolioLedger:
 
     # *****************
     # Ledger Operations
+    # MARK: Ledger Operations
     # *****************
+
+    def _add_row(self, value_dict):
+        self._ledger_df = pd.concat([
+            self._ledger_df,
+            pd.DataFrame([value_dict])
+        ]).reset_index(drop=True)
 
     def deposit(
             self,
-            date_execution,
-            # operation,
-            instrument,
-            # origin,
-            # destination,
-            # price_in,
-            # price,
-            # price_w_expenses,
-            size,
-            commission,
-            tax,
-            stated_total,
-            name,
-            instrument_type,
-            account,
-            # Q_price_commission_tax_verification,
+                date_execution, instrument, amount, instrument_name, instrument_type, account,
+                # Optional arguments
+                date_order=None, description='', notes='',
+                ):
+        """Creates a new row with a deposit.
 
-            # Optional arguments
-            date_order=None,
-            description='',
-            notes='',
-            commission_notes='',
-            tax_notes='',
-    ):
+        Important: Deposit means a instrument entering an account. A commission or tax for a deposit is not possible, create a new operation for that purpose after doing the deposit.
 
-        # TODO:
-        #   - If there was a cost for deposit/withdraw it should be stated as another operation
-        #   - A deposit/withdraw shouldn't have a commission/tax because the cost is in another op, see above
-        #   - A deposit/withdraw stated_total should be equal to size
-        #   - Create some kind of enum to define
-        #       - instrument_type
-        #   - There should be cost operations, probably with a 'pay_' prefix:
-        #       - pay_deposit
-        #       - pay_withdraw
-        #       - pay_tax
-        #       - pay_transfer
-
-        price = 1
-        price_w_expenses = stated_total / size
-        Q_price_commission_tax_verification = stated_total - \
-            (size * price + commission + tax)
-        new_deposit_row = {
+        Args:
+            date_execution (_type_): _description_
+            instrument (_type_): _description_
+            amount (_type_): _description_
+            instrument_name (_type_): _description_
+            instrument_type (_type_): _description_
+            account (_type_): _description_
+            date_order (_type_, optional): _description_. Defaults to None.
+            description (str, optional): _description_. Defaults to ''.
+            notes (str, optional): _description_. Defaults to ''.
+        """
+        self._add_row({
             'date_execution': date_execution,
             'operation': 'deposit',
             'instrument': instrument,
             'origin': '',
-            'destination': '',
+            'destination': instrument,
             'price_in': instrument,
             'price': 1,
-            'price_w_expenses': price_w_expenses,
-            'size': size,
-            'commission': commission,
-            'tax': tax,
-            'stated_total': stated_total,
+            'price_w_expenses': 1,
+            'size': amount,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': amount,
             'date_order': date_order if date_order != None else date_execution,
-            'name': name,
+            'instrument_name': instrument_name,
             'instrument_type': instrument_type,
             'description': description,
             'notes': notes,
-            'commission_notes': commission_notes,
-            'tax_notes': tax_notes,
+            'commission_notes': '',
+            'tax_notes': '',
             'account': account,
-            'Q_price_commission_tax_verification': Q_price_commission_tax_verification,
-        }
-        new_df = pd.DataFrame([new_deposit_row])
-        self._ledger_df = pd.concat([self._ledger_df, new_df])
+            'Q_price_commission_tax_verification': 0,
+        })
+
 
     def invest(self):
         pass
@@ -562,8 +634,34 @@ class SimplePortfolioLedger:
     def uninvest(self):
         pass
 
-    def withdraw(self):
-        pass
+    def withdraw(self,
+                 date_execution, instrument, amount, instrument_name, instrument_type, account,
+                 # Optional arguments
+                 date_order=None, description='', notes='',
+                 ):
+        self._add_row({
+            'date_execution': date_execution,
+            'operation': 'withdraw',
+            'instrument': instrument,
+            'origin': instrument,
+            'destination': '',
+            'price_in': instrument,
+            'price': 1,
+            'price_w_expenses': 1,
+            'size': -amount,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': -amount,
+            'date_order': date_order if date_order != None else date_execution,
+            'instrument_name': instrument_name,
+            'instrument_type': instrument_type,
+            'description': description,
+            'notes': notes,
+            'commission_notes': '',
+            'tax_notes': '',
+            'account': account,
+            'Q_price_commission_tax_verification': 0,
+        })
 
     def dividend(self):
         pass
