@@ -196,7 +196,7 @@ class SimplePortfolioLedger:
         ledger.drop(ledger.index, inplace=True)
 
         return ledger
-    
+
     def _get_extraneous_ops(self):
         # Compute extraneous_ops, which shows all unique operations from self._ledger_df
         #   minus all operations self._ops_names
@@ -576,8 +576,10 @@ class SimplePortfolioLedger:
             pd.DataFrame([value_dict])
         ]).reset_index(drop=True)
 
-    def deposit(
-            self,
+    def buy(self):
+        pass
+
+    def deposit(self,
                 date_execution, instrument, amount, instrument_name, instrument_type, account,
                 # Optional arguments
                 date_order=None, description='', notes='',
@@ -621,14 +623,16 @@ class SimplePortfolioLedger:
             'Q_price_commission_tax_verification': 0,
         })
 
+    def dividend(self):
+        pass
 
     def invest(self):
         pass
 
-    def buy(self):
+    def sell(self):
         pass
 
-    def sell(self):
+    def stock_dividend(self):
         pass
 
     def uninvest(self):
@@ -662,9 +666,3 @@ class SimplePortfolioLedger:
             'account': account,
             'Q_price_commission_tax_verification': 0,
         })
-
-    def dividend(self):
-        pass
-
-    def stock_dividend(self):
-        pass
