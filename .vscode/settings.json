@@ -1,0 +1,9 @@
+{
+    "black-formatter.args": [
+        "--skip-string-normalization",
+        "--line-length=100"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+}
