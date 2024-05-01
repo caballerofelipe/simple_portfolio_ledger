@@ -114,8 +114,18 @@ class SimplePortfolioLedger:
         }
     }
 
-    _ops_names = set(('buy', 'deposit', 'dividend', 'invest',
-                     'sell', 'stock dividend', 'uninvest', 'withdraw'))
+    _ops_names = set(
+        (
+            'buy',
+            'deposit',
+            'dividend',
+            'invest',
+            'sell',
+            'stock dividend',
+            'uninvest',
+            'withdraw',
+        )
+    )
 
     def __init__(self) -> None:
         self._ledger_df = self._create_empty_ledger_df()
@@ -135,14 +145,17 @@ class SimplePortfolioLedger:
 
             if len(self._ledger_df) == 0:
                 warnings.warn(
-                    f'WARNING: Ledger is empty, no columns computed, showing only basic column structure. (Warning issued by decorator [{deco_name}])', stacklevel=2)
+                    f'WARNING: Ledger is empty, no columns computed, showing only basic column structure. (Warning issued by decorator [{deco_name}])',
+                    stacklevel=2,
+                )
                 # return None
 
             extraneous_ops = self._get_extraneous_ops()
             if len(extraneous_ops) > 0:
                 raise ValueError(
                     'One or more forbidden operations were inserted in the ledger.',
-                    extraneous_ops)
+                    extraneous_ops,
+                )
 
             return func(self, *args, **kwargs)
 
@@ -171,10 +184,9 @@ class SimplePortfolioLedger:
             if type(columns) == list:
                 to_return = []
                 for col in columns:
-                    to_return.append({
-                        col: cls._ledger_columns_attrs['column notes'].get(
-                            col, 'NOT DEFINED')
-                    })
+                    to_return.append(
+                        {col: cls._ledger_columns_attrs['column notes'].get(col, 'NOT DEFINED')}
+                    )
                 return to_return
             elif type(columns) == str:
                 return cls._ledger_columns_attrs['column notes'].get(columns, 'NOT DEFINED')
@@ -211,16 +223,15 @@ class SimplePortfolioLedger:
     # *****************
 
     def ledger(
-            self,
-            cols_operation=False,
-            cols_operation_cumsum=False,
-            cols_operation_balance_by_instrument=False,
-            thousands_fmt_sep=False,
-            thousands_fmt_decimals=1
+        self,
+        cols_operation=False,
+        cols_operation_cumsum=False,
+        cols_operation_balance_by_instrument=False,
+        thousands_fmt_sep=False,
+        thousands_fmt_decimals=1,
     ):
         if len(self._ledger_df) == 0:
-            warnings.warn(
-                'WARNING: Ledger is empty, showing only basic structure.')
+            warnings.warn('WARNING: Ledger is empty, showing only basic structure.')
         dfs_toconcat = [self._ledger_df]
         if cols_operation is True:
             dfs_toconcat.append(self.cols_operation())
@@ -229,22 +240,29 @@ class SimplePortfolioLedger:
         if cols_operation_balance_by_instrument is True:
             dfs_toconcat.append(self.cols_operation_balance_by_instrument())
 
-        to_return = (pd
-                     .concat(dfs_toconcat, join='inner', axis=1)
-                     .convert_dtypes(
-                         convert_string=False
-                     )
-                     .astype({
-                         'date_execution': 'datetime64[s]',
-                         'date_order': 'datetime64[s]',
-                     })
-                     )
+        to_return = (
+            pd
+            # Join DataFrames
+            .concat(dfs_toconcat, join='inner', axis=1)
+            # Convert to simpler types
+            .convert_dtypes(convert_string=False)
+            # Convert dates to datetime64[s]
+            .astype(
+                {
+                    'date_execution': 'datetime64[s]',
+                    'date_order': 'datetime64[s]',
+                }
+            )
+        )
 
         if thousands_fmt_sep is True:
-            return (to_return
-                    .map(lambda x: f'{x:,.{thousands_fmt_decimals}f}' if isinstance(x, float) else x)
-                    .map(lambda x: f'{x:,d}' if isinstance(x, int) else x)
-                    )
+            return (
+                to_return
+                # On floats, add thousands separator and [thousands_fmt_decimals] decimals
+                .map(lambda x: (f'{x:,.{thousands_fmt_decimals}f}' if isinstance(x, float) else x))
+                # On ints, add thousands separator
+                .map(lambda x: f'{x:,d}' if isinstance(x, int) else x)
+            )
         else:
             return to_return
 
@@ -260,8 +278,7 @@ class SimplePortfolioLedger:
         """
 
         # Create groups by instrument/operation
-        groups = self._ledger_df.groupby(
-            ['instrument', 'account', 'operation'])
+        groups = self._ledger_df.groupby(['instrument', 'account', 'operation'])
 
         # For each group, return the size (for example if an op is buy, the column buy would be filled, not all others)
         groups_opsize = groups.apply(lambda x: x['size'], include_groups=False)
@@ -279,6 +296,7 @@ class SimplePortfolioLedger:
             .fillna(0)
             # Move index instrument created by the last groupby to a column
             .reset_index(['instrument', 'account'])
+            # Sort by the original index
             .sort_index()
         )
 
@@ -294,12 +312,10 @@ class SimplePortfolioLedger:
         """
 
         # Create groups by instrument/operation
-        groups = self._ledger_df.groupby(
-            ['operation', 'instrument', 'account'])
+        groups = self._ledger_df.groupby(['operation', 'instrument', 'account'])
 
-        # For each group do a cumsum for the size
-        groups_cumsum = groups.apply(
-            lambda x: x['size'].cumsum(), include_groups=False)
+        # For each group do a cumsum for size
+        groups_cumsum = groups.apply(lambda x: x['size'].cumsum(), include_groups=False)
 
         # Used to remane the colums
         ops_cumsum_names = [f'cumsum {c}' for c in self._ops_names]
@@ -332,8 +348,7 @@ class SimplePortfolioLedger:
                 # sum of all cumsum columns
                 held=lambda x: x[ops_cumsum_names].sum(axis=1),
                 # Invested total in positive value
-                invested=lambda x: x[['cumsum invest',
-                                      'cumsum uninvest']].sum(axis=1).abs(),
+                invested=lambda x: x[['cumsum invest', 'cumsum uninvest']].sum(axis=1).abs(),
             )
             .rename(columns={'held': 'cumsum held', 'invested': 'cumsum invested'})
             .sort_index()
@@ -384,8 +399,7 @@ class SimplePortfolioLedger:
 
             if info['operation'] == 'deposit':
                 df.loc[idx, 'balance deposit'] = (
-                    prev_operation_balance['balance deposit'] +
-                    df.loc[idx, 'size']
+                    prev_operation_balance['balance deposit'] + df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'buy':
@@ -393,24 +407,20 @@ class SimplePortfolioLedger:
                     prev_operation_balance['balance buy'] + df.loc[idx, 'size']
                 )
                 df.loc[idx, 'balance buy total payed'] = (
-                    prev_operation_balance['balance buy total payed']
-                    + df.loc[idx, 'stated_total']
+                    prev_operation_balance['balance buy total payed'] + df.loc[idx, 'stated_total']
                 )
                 df.loc[idx, 'avg buy total price'] = (
-                    df.loc[idx, 'balance buy total payed']
-                    / df.loc[idx, 'balance buy']
+                    df.loc[idx, 'balance buy total payed'] / df.loc[idx, 'balance buy']
                 )
 
             elif info['operation'] == 'dividend':
                 df.loc[idx, 'balance dividend'] = (
-                    prev_operation_balance['balance dividend'] +
-                    df.loc[idx, 'size']
+                    prev_operation_balance['balance dividend'] + df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'stock dividend':
                 df.loc[idx, 'balance stock dividend'] = (
-                    prev_operation_balance['balance stock dividend'] +
-                    df.loc[idx, 'size']
+                    prev_operation_balance['balance stock dividend'] + df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'withdraw':
@@ -423,27 +433,33 @@ class SimplePortfolioLedger:
                         withdrew = withdrew - prev_operation_balance['balance deposit']
                         df.loc[idx, 'balance deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] = prev_operation_balance['balance deposit'] - withdrew
+                        df.loc[idx, 'balance deposit'] = (
+                            prev_operation_balance['balance deposit'] - withdrew
+                        )
                         withdrew = 0
                 if withdrew > 0 and prev_operation_balance['balance stock dividend'] > 0:
                     if withdrew > prev_operation_balance['balance stock dividend']:
                         withdrew = withdrew - prev_operation_balance['balance stock dividend']
                         df.loc[idx, 'balance stock dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] = prev_operation_balance['balance stock dividend'] - withdrew
+                        df.loc[idx, 'balance stock dividend'] = (
+                            prev_operation_balance['balance stock dividend'] - withdrew
+                        )
                         withdrew = 0
                 if withdrew > 0 and prev_operation_balance['balance dividend'] > 0:
                     if withdrew > prev_operation_balance['balance dividend']:
                         withdrew = withdrew - prev_operation_balance['balance dividend']
                         df.loc[idx, 'balance dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] = prev_operation_balance['balance dividend'] - withdrew
+                        df.loc[idx, 'balance dividend'] = (
+                            prev_operation_balance['balance dividend'] - withdrew
+                        )
                         withdrew = 0
                 if withdrew > 0:
                     df.loc[idx, 'balance buy'] = prev_operation_balance['balance buy'] - withdrew
                     df.loc[idx, 'balance buy total payed'] = (
-                        prev_operation_balance['balance buy total payed'] -
-                        withdrew * prev_operation_balance['avg buy total price']
+                        prev_operation_balance['balance buy total payed']
+                        - withdrew * prev_operation_balance['avg buy total price']
                     )
 
                 # TODO WARNING:
@@ -459,27 +475,33 @@ class SimplePortfolioLedger:
                         sold = sold - prev_operation_balance['balance deposit']
                         df.loc[idx, 'balance deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] = prev_operation_balance['balance deposit'] - sold
+                        df.loc[idx, 'balance deposit'] = (
+                            prev_operation_balance['balance deposit'] - sold
+                        )
                         sold = 0
                 if sold > 0 and prev_operation_balance['balance stock dividend'] > 0:
                     if sold > prev_operation_balance['balance stock dividend']:
                         sold = sold - prev_operation_balance['balance stock dividend']
                         df.loc[idx, 'balance stock dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] = prev_operation_balance['balance stock dividend'] - sold
+                        df.loc[idx, 'balance stock dividend'] = (
+                            prev_operation_balance['balance stock dividend'] - sold
+                        )
                         sold = 0
                 if sold > 0 and prev_operation_balance['balance dividend'] > 0:
                     if sold > prev_operation_balance['balance dividend']:
                         sold = sold - prev_operation_balance['balance dividend']
                         df.loc[idx, 'balance dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] = prev_operation_balance['balance dividend'] - sold
+                        df.loc[idx, 'balance dividend'] = (
+                            prev_operation_balance['balance dividend'] - sold
+                        )
                         sold = 0
                 if sold > 0:
                     df.loc[idx, 'balance buy'] = prev_operation_balance['balance buy'] - sold
                     df.loc[idx, 'balance buy total payed'] = (
-                        prev_operation_balance['balance buy total payed'] -
-                        sold * prev_operation_balance['avg buy total price']
+                        prev_operation_balance['balance buy total payed']
+                        - sold * prev_operation_balance['avg buy total price']
                     )
 
                     # # Compute profit or loss
@@ -496,8 +518,7 @@ class SimplePortfolioLedger:
                 df.loc[idx, 'avg buy total price'] = pd.NA
             else:
                 df.loc[idx, 'avg buy total price'] = (
-                    df.loc[idx, 'balance buy total payed']
-                    / df.loc[idx, 'balance buy']
+                    df.loc[idx, 'balance buy total payed'] / df.loc[idx, 'balance buy']
                 )
 
             # TODO: WARNING:
@@ -513,27 +534,31 @@ class SimplePortfolioLedger:
     @_deco_check_ledger_for_cols
     def cols_operation_balance_by_instrument(self, show_instr_accnt=False):
 
-        # Name not definitely defined: 'balance buy total payed' should represent the amount used to buy an instrument, for instance how much clp where used to buy USD
         new_columns = [
             'balance deposit',
             'balance dividend',
             'balance stock dividend',
             'balance buy',
-            'balance buy total payed',
+            'balance buy total payed', # Amount used to buy an instrument
             'avg buy total price',
-            # 'invest balance', # That was already calculated before, same as cumsum invest
-            # 'uninvest balance', # uninvest balance doesn't make sense because this removes, we want invest balance, see previous note
-            # 'withdraw', # withdraw balance doesn't make sense because it means removing something
-            # 'sell', # sell balance doesn't make sense because it means removing something
+            # A balance for invest is calculated in cols_operation_cumsum, called 'invest cumsum'
+            # A balance for uninvest is calculated in cols_operation_cumsum, called 'uninvest cumsum'
+            # A withdraw balance doesn't make sense because it means removing something
+            # A sell balance doesn't make sense because it means removing something
             'sell profit loss',
-            'balance sell profit loss'
+            'balance sell profit loss',
         ]
 
-        groups = (self
-                  ._ledger_df
-                  [['operation', 'instrument', 'price_w_expenses',
-                    'size', 'stated_total', 'account']]
-                  .groupby(['instrument', 'account']))
+        # We only use the columns necessary for the grouping
+        cols_subset = [
+            'operation',
+            'instrument',
+            'price_w_expenses',
+            'size',
+            'stated_total',
+            'account',
+        ]
+        groups = self._ledger_df[cols_subset].groupby(['instrument', 'account'])
 
         to_return = (
             groups.apply(
@@ -550,6 +575,7 @@ class SimplePortfolioLedger:
             .fillna(0)
             # Move indexes 'instrument' and 'account' created by the last groupby to a column
             .reset_index(['instrument', 'account'])
+            # Sort by the original index
             .sort_index()
         )
 
@@ -562,7 +588,7 @@ class SimplePortfolioLedger:
         # Remove empty rows (where everything is filled with na)
         self._ledger_df.drop(
             self._ledger_df[self._ledger_df.isna().all(axis=1)].index,
-            inplace=True
+            inplace=True,
         )
 
     # *****************
@@ -571,19 +597,27 @@ class SimplePortfolioLedger:
     # *****************
 
     def _add_row(self, value_dict):
-        self._ledger_df = pd.concat([
-            self._ledger_df,
-            pd.DataFrame([value_dict])
-        ]).reset_index(drop=True)
+        self._ledger_df = (
+            pd.concat([self._ledger_df, pd.DataFrame([value_dict])])
+            # Make the index coherent (else index might have duplicates)
+            .reset_index(drop=True)
+        )
 
     def buy(self):
         pass
 
-    def deposit(self,
-                date_execution, instrument, amount, instrument_name, instrument_type, account,
-                # Optional arguments
-                date_order=None, description='', notes='',
-                ):
+    def deposit(
+        self,
+        date_execution,
+        instrument,
+        amount,
+        instrument_name,
+        instrument_type,
+        account,
+        date_order=None,
+        description='',
+        notes='',
+    ):
         """Creates a new row with a deposit.
 
         Important: Deposit means a instrument entering an account. A commission or tax for a deposit is not possible, create a new operation for that purpose after doing the deposit.
@@ -599,29 +633,31 @@ class SimplePortfolioLedger:
             description (str, optional): _description_. Defaults to ''.
             notes (str, optional): _description_. Defaults to ''.
         """
-        self._add_row({
-            'date_execution': date_execution,
-            'operation': 'deposit',
-            'instrument': instrument,
-            'origin': '',
-            'destination': instrument,
-            'price_in': instrument,
-            'price': 1,
-            'price_w_expenses': 1,
-            'size': amount,
-            'commission': 0,
-            'tax': 0,
-            'stated_total': amount,
-            'date_order': date_order if date_order != None else date_execution,
-            'instrument_name': instrument_name,
-            'instrument_type': instrument_type,
-            'description': description,
-            'notes': notes,
-            'commission_notes': '',
-            'tax_notes': '',
-            'account': account,
-            'Q_price_commission_tax_verification': 0,
-        })
+        self._add_row(
+            {
+                'date_execution': date_execution,
+                'operation': 'deposit',
+                'instrument': instrument,
+                'origin': '',
+                'destination': instrument,
+                'price_in': instrument,
+                'price': 1,
+                'price_w_expenses': 1,
+                'size': amount,
+                'commission': 0,
+                'tax': 0,
+                'stated_total': amount,
+                'date_order': (date_order if date_order != None else date_execution),
+                'instrument_name': instrument_name,
+                'instrument_type': instrument_type,
+                'description': description,
+                'notes': notes,
+                'commission_notes': '',
+                'tax_notes': '',
+                'account': account,
+                'Q_price_commission_tax_verification': 0,
+            }
+        )
 
     def dividend(self):
         pass
@@ -638,31 +674,40 @@ class SimplePortfolioLedger:
     def uninvest(self):
         pass
 
-    def withdraw(self,
-                 date_execution, instrument, amount, instrument_name, instrument_type, account,
-                 # Optional arguments
-                 date_order=None, description='', notes='',
-                 ):
-        self._add_row({
-            'date_execution': date_execution,
-            'operation': 'withdraw',
-            'instrument': instrument,
-            'origin': instrument,
-            'destination': '',
-            'price_in': instrument,
-            'price': 1,
-            'price_w_expenses': 1,
-            'size': -amount,
-            'commission': 0,
-            'tax': 0,
-            'stated_total': -amount,
-            'date_order': date_order if date_order != None else date_execution,
-            'instrument_name': instrument_name,
-            'instrument_type': instrument_type,
-            'description': description,
-            'notes': notes,
-            'commission_notes': '',
-            'tax_notes': '',
-            'account': account,
-            'Q_price_commission_tax_verification': 0,
-        })
+    def withdraw(
+        self,
+        date_execution,
+        instrument,
+        amount,
+        instrument_name,
+        instrument_type,
+        account,
+        date_order=None,
+        description='',
+        notes='',
+    ):
+        self._add_row(
+            {
+                'date_execution': date_execution,
+                'operation': 'withdraw',
+                'instrument': instrument,
+                'origin': instrument,
+                'destination': '',
+                'price_in': instrument,
+                'price': 1,
+                'price_w_expenses': 1,
+                'size': -amount,
+                'commission': 0,
+                'tax': 0,
+                'stated_total': -amount,
+                'date_order': (date_order if date_order != None else date_execution),
+                'instrument_name': instrument_name,
+                'instrument_type': instrument_type,
+                'description': description,
+                'notes': notes,
+                'commission_notes': '',
+                'tax_notes': '',
+                'account': account,
+                'Q_price_commission_tax_verification': 0,
+            }
+        )
