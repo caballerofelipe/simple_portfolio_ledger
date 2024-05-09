@@ -1,13 +1,15 @@
+'''A simple ledger to keep track of a Portfolio's movements.'''
+
 import functools
 import inspect
 import warnings
 
 import pandas as pd
 
-"""
+'''
 Notes:
 - MARK is a functionality from Visual Studio Code to find things in the minimap.
-"""
+'''
 
 # TODO
 _ = '''
