@@ -228,20 +228,48 @@ class SimplePortfolioLedger:
         cols_operation_balance_by_instrument=False,
         thousands_fmt_sep=False,
         thousands_fmt_decimals=1,
-    ):
+        simplify_dtypes=True,
+    ) -> pd.DataFrame:
+        """Returns The Ledger, with optional additional information.
+
+        Args:
+            cols_operation (bool, optional): Whether to add cols_operation to The Ledger. Defaults to False.
+            cols_operation_cumsum (bool, optional): Whether to add cols_operation_cumsum to The Ledger. Defaults to False.
+            cols_operation_balance_by_instrument (bool, optional): Whether to add cols_operation_balance_by_instrument to The Ledger. Defaults to False.
+            thousands_fmt_sep (bool, optional): Add a thousands separator. Defaults to False.
+            thousands_fmt_decimals (int, optional): Decimals to print, used only when thousands_fmt_sep is set to True. Defaults to 1.
+            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+
+        Returns:
+            pd.DataFrame: Returns The Ledger, with optional additional information.
+        """
         if len(self._ledger_df) == 0:
             warnings.warn('WARNING: Ledger is empty, showing only basic structure.')
 
-        dfs_toconcat = [self._ledger_df]
+        the_ledger = self._ledger_df
+
+        if simplify_dtypes is True:
+            with pd.option_context('future.no_silent_downcasting', True):
+                the_ledger = (
+                    the_ledger
+                    # See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339
+                    .astype('object')
+                    .convert_dtypes()
+                    .astype('object')
+                    .replace(pd.NA, float('nan'))
+                    .infer_objects()
+                )
+
+        dfs_toconcat = [the_ledger]
 
         if cols_operation is True:
-            tmp = self.cols_operation()
+            tmp = self.cols_operation(simplify_dtypes=simplify_dtypes)
             dfs_toconcat.append(tmp)
         if cols_operation_cumsum is True:
-            tmp = self.cols_operation_cumsum()
+            tmp = self.cols_operation_cumsum(simplify_dtypes=simplify_dtypes)
             dfs_toconcat.append(tmp)
         if cols_operation_balance_by_instrument is True:
-            tmp = self.cols_operation_balance_by_instrument()
+            tmp = self.cols_operation_balance_by_instrument(simplify_dtypes=simplify_dtypes)
             dfs_toconcat.append(tmp)
 
         to_return = (
@@ -271,11 +299,12 @@ class SimplePortfolioLedger:
             return to_return
 
     @_deco_check_ledger_for_cols
-    def cols_operation(self, show_instr_accnt=False):
+    def cols_operation(self, show_instr_accnt=False, simplify_dtypes=True) -> pd.DataFrame:
         """Returns a dataframe with 1 column per operation.
 
         Args:
             show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
+            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
 
         Returns:
             pd.DataFrame: Returns a dataframe with 1 column per operation.
@@ -310,15 +339,33 @@ class SimplePortfolioLedger:
                     .infer_objects()
                 )
 
+                if simplify_dtypes is True:
+                    with pd.option_context('future.no_silent_downcasting', True):
+                        to_return = (
+                            to_return
+                            # See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339
+                            .astype('object')
+                            .convert_dtypes()
+                            .astype('object')
+                            .replace(pd.NA, float('nan'))
+                            .infer_objects()
+                        )
+
         if show_instr_accnt is True:
             return to_return[['instrument', 'account', *sorted(self._ops_names)]]
         else:
             return to_return[[*sorted(self._ops_names)]]
 
     @_deco_check_ledger_for_cols
-    def cols_operation_cumsum(self, show_instr_accnt=False):
-        """
-        Add one column per operation but do a cumsum per instrument/operation.
+    def cols_operation_cumsum(self, show_instr_accnt=False, simplify_dtypes=True) -> pd.DataFrame:
+        """Returns a DataFrame with one column per operation but do a cumsum per instrument/account.
+
+        Args:
+            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
+            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+
+        Returns:
+            pd.DataFrame: Returns a DataFrame with one column per operation but do a cumsum per instrument/operation/account.
         """
 
         # List of columns to return, SORTED by self._ops_names
@@ -379,6 +426,18 @@ class SimplePortfolioLedger:
                     .infer_objects()
                 )
 
+                if simplify_dtypes is True:
+                    with pd.option_context('future.no_silent_downcasting', True):
+                        to_return = (
+                            to_return
+                            # See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339
+                            .astype('object')
+                            .convert_dtypes()
+                            .astype('object')
+                            .replace(pd.NA, float('nan'))
+                            .infer_objects()
+                        )
+
         if show_instr_accnt is True:
             return to_return[
                 ['instrument', 'account', *ops_cumsum_names, 'cumsum held', 'cumsum invested']
@@ -387,7 +446,7 @@ class SimplePortfolioLedger:
             return to_return[[*ops_cumsum_names, 'cumsum held', 'cumsum invested']]
 
     @staticmethod
-    def _cols_operation_balance_by_instrument_for_group(group_df, new_columns):
+    def _cols_operation_balance_by_instrument_for_group(group_df, new_columns) -> pd.DataFrame:
         """
         WARNING: not to be called by itself. It needs a grouping per instrument.
         """
@@ -557,7 +616,18 @@ class SimplePortfolioLedger:
         return df
 
     @_deco_check_ledger_for_cols
-    def cols_operation_balance_by_instrument(self, show_instr_accnt=False):
+    def cols_operation_balance_by_instrument(
+        self, show_instr_accnt=False, simplify_dtypes=True
+    ) -> pd.DataFrame:
+        """Returns a DataFrame with a balance per operation per instrument/account.
+
+        Args:
+            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
+            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+
+        Returns:
+            pd.DataFrame: Returns a DataFrame with a balance per operation per instrument/account.
+        """
 
         new_columns = [
             'balance deposit',
@@ -611,6 +681,18 @@ class SimplePortfolioLedger:
                 # Try to pass colums where dtype is object to a type like int64 or float64
                 .infer_objects()
             )
+            
+            if simplify_dtypes is True:
+                with pd.option_context('future.no_silent_downcasting', True):
+                    to_return = (
+                        to_return
+                        # See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339
+                        .astype('object')
+                        .convert_dtypes()
+                        .astype('object')
+                        .replace(pd.NA, float('nan'))
+                        .infer_objects()
+                    )
 
         if show_instr_accnt is True:
             return to_return[['instrument', 'account', *new_columns]]
