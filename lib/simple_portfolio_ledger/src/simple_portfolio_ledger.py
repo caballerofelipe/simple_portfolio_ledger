@@ -11,6 +11,7 @@ Notes:
 - MARK is a functionality from Visual Studio Code to find things in the minimap.
 '''
 
+# MARK: TODO LIST
 # TODO
 _ = '''
 - For all operations
@@ -203,7 +204,6 @@ class SimplePortfolioLedger:
 
         # About attrs:
         #  https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.attrs.html
-        # portfolio_ledger.attrs = portfolio_ledger_columns_attrs
         ledger.attrs = cls._ledger_columns_attrs
 
         return ledger
@@ -681,7 +681,7 @@ class SimplePortfolioLedger:
                 # Try to pass colums where dtype is object to a type like int64 or float64
                 .infer_objects()
             )
-            
+
             if simplify_dtypes is True:
                 with pd.option_context('future.no_silent_downcasting', True):
                     to_return = (
