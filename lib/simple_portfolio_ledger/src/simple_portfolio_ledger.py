@@ -26,6 +26,10 @@ _ = '''
     - For instance, a sell is an univest and a sell, so both ops should have an id
         e.g. 132 and maybe a sub id 1 and 2
         these could go on different columns or in one column (132-1 and 132-2)
+- Review _ledger_columns_attrs.
+- In _cols_operation_balance_by_instrument_for_group(), for withdraw and sell
+    there should be a final review. If withdraw/sell is more than what I have
+    deposit should have a negative number to show an over withdraw or sell
 IDEAS: 
 - There should be cost operations, probably with a 'pay_' prefix:
     - pay_deposit
@@ -60,7 +64,6 @@ class SimplePortfolioLedger:
         'Q_price_commission_tax_verification',
     )
 
-    # TODO: review attrs
     # Column description in a dict
     _ledger_columns_attrs = {
         'column notes': {
@@ -554,10 +557,6 @@ class SimplePortfolioLedger:
                         - withdrew * df.loc[prev_idx, 'avg buy total price']
                     )
 
-                # TODO WARNING:
-                # There should be a final review, if withdraw is more than what I have,
-                # deposit should have a negative number to show an over withdraw or sell
-
             elif info['operation'] == 'sell':
                 # sell takes money if available in this order from:
                 #  [deposit, stock dividend, dividend, buy]
@@ -610,10 +609,6 @@ class SimplePortfolioLedger:
                 df.loc[idx, 'avg buy total price'] = (
                     df.loc[idx, 'balance buy total payed'] / df.loc[idx, 'balance buy']
                 )
-
-            # TODO: WARNING:
-            # There should be a final review, if withdraw is more than what I have,
-            # deposit should have a negative number to show an over withdraw or sell
 
             prev_idx = idx  # Keep track of last id for next iteration
 
@@ -832,7 +827,7 @@ class SimplePortfolioLedger:
             Withdraw description. By default ''.
         notes : str, optional
             Withdraw notes. By default ''.
-        """        
+        """
         self._add_row(
             {
                 'date_execution': date_execution,
