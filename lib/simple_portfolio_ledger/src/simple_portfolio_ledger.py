@@ -3,7 +3,9 @@
 import functools
 import inspect
 import warnings
+from typing import List
 
+import numpy as np
 import pandas as pd
 
 '''
@@ -15,48 +17,27 @@ Notes:
 # TODO
 _ = '''
 - For all operations
-  - Add type validation
-  - Create some kind of enum to define
-      - instrument_type
+    - Add type validation
 - Deposit/withdraw
-  - If there's a cost should be stated as another operation
-  - No commission/tax, add another op for that
-  - Only an amount should be deposited or withdrew
-IDEAS: 
-- There should be cost operations, probably with a 'pay_' prefix:
-  - pay_deposit
-  - pay_withdraw
-  - pay_tax
-  - pay_transfer
-  - account_cost
-- Maybe add a new column for operation id and sub id?
-  - For instance, a sell is an univest and a sell, so both ops should have an id
+    - If there's a cost should be stated as another operation
+    - No commission/tax, add another op for that
+    - Only an amount should be deposited or withdrew
+- Add a new column for operation id and sub id?
+    - For instance, a sell is an univest and a sell, so both ops should have an id
         e.g. 132 and maybe a sub id 1 and 2
         these could go on different columns or in one column (132-1 and 132-2)
+IDEAS: 
+- There should be cost operations, probably with a 'pay_' prefix:
+    - pay_deposit
+    - pay_withdraw
+    - pay_tax
+    - pay_transfer
+    - account_cost
 '''
 
 
 class SimplePortfolioLedger:
-    """_summary_
 
-    Returns:
-        _type_: _description_
-    """
-
-    # # Basic
-    # 'date_execution', 'date_order',
-    # 'operation',
-    # 'instrument_type', 'instrument_name', 'instrument', 'origin', 'destination',
-    # 'price_in', 'price', 'price_w_expenses', 'size', 'commission', 'tax', 'stated_total',
-    # 'commission_notes', 'tax_notes',
-    # # Additional
-    # 'description', 'notes',
-    # # Multiple accounts
-    # 'account',
-    # # Debugging
-    # 'Q_price_commission_tax_verification',
-    #
-    # Should be the same columns as above but in a different order, more logical order
     _ledger_columns = (
         'date_execution',
         'operation',
@@ -71,8 +52,6 @@ class SimplePortfolioLedger:
         'tax',
         'stated_total',
         'date_order',
-        'instrument_name',
-        'instrument_type',
         'description',
         'notes',
         'commission_notes',
@@ -94,8 +73,6 @@ class SimplePortfolioLedger:
             #   - uninvest:
             #
             'operation': 'Can be: buy, sell, deposit (for account), withdraw (for account)',
-            'instrument_type': 'For example: cash, stock, mutual fund, etf, etc..',
-            'instrument_name': 'Instrument name.',
             'instrument': 'Instrument code (USD, CLP, COP, AAPL, AMZN).',
             'origin': 'Where did the resource come from.',
             'destination': 'Where did the resource go.',
@@ -131,6 +108,7 @@ class SimplePortfolioLedger:
 
     def __init__(self) -> None:
         self._ledger_df = self._create_empty_ledger_df()
+        self._instruments_metadata = {}
 
     # *****************
     # Decorators
@@ -170,19 +148,8 @@ class SimplePortfolioLedger:
     # *****************
 
     @classmethod
-    def get_ledger_columns(cls):
-        return cls._ledger_columns
-
-    @classmethod
     def whatis(cls, columns):
-        """Small function to return information about different parts of the data.
-
-        Args:
-            columns (_type_, optional): _description_. Defaults to None.
-
-        Returns:
-            _type_: _description_
-        """
+        """Return information about different parts of the data."""
         if isinstance(columns, list):
             to_return = []
             for col in columns:
@@ -197,7 +164,14 @@ class SimplePortfolioLedger:
             return None
 
     @classmethod
-    def _create_empty_ledger_df(cls):
+    def _create_empty_ledger_df(cls) -> pd.DataFrame:
+        """Returns an empty ledger DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            Empty ledger DataFrame.
+        """
 
         # Create an empty portfolio_ledger
         ledger = pd.DataFrame(columns=cls._ledger_columns)
@@ -223,30 +197,53 @@ class SimplePortfolioLedger:
 
     def ledger(
         self,
-        cols_operation=False,
-        cols_operation_cumsum=False,
-        cols_operation_balance_by_instrument=False,
+        instrument_type: bool = False,
+        instrument_name: bool = False,
+        cols_operation: bool = False,
+        cols_operation_cumsum: bool = False,
+        cols_operation_balance_by_instrument: bool = False,
         thousands_fmt_sep=False,
         thousands_fmt_decimals=1,
         simplify_dtypes=True,
     ) -> pd.DataFrame:
         """Returns The Ledger, with optional additional information.
 
-        Args:
-            cols_operation (bool, optional): Whether to add cols_operation to The Ledger. Defaults to False.
-            cols_operation_cumsum (bool, optional): Whether to add cols_operation_cumsum to The Ledger. Defaults to False.
-            cols_operation_balance_by_instrument (bool, optional): Whether to add cols_operation_balance_by_instrument to The Ledger. Defaults to False.
-            thousands_fmt_sep (bool, optional): Add a thousands separator. Defaults to False.
-            thousands_fmt_decimals (int, optional): Decimals to print, used only when thousands_fmt_sep is set to True. Defaults to 1.
-            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+        Parameters
+        ----------
+        instrument_type : bool, optional
+            Wether to add a column for the instrument type. By default False.
+        instrument_name : bool, optional
+            Wether to add a column for the instrument name. By default False.
+        cols_operation : bool, optional
+            Whether to add cols_operation to The Ledger. By default False.
+        cols_operation_cumsum : bool, optional
+            Whether to add cols_operation_cumsum to The Ledger. By default False.
+        cols_operation_balance_by_instrument : bool, optional
+            Whether to add cols_operation_balance_by_instrument to The Ledger. By default False.
+        thousands_fmt_sep : bool, optional
+            Add a thousands separator. By default False.
+        thousands_fmt_decimals : int, optional
+            Decimals to print, used only when thousands_fmt_sep is set to True. By default 1.
+        simplify_dtypes : bool, optional
+             Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. By default True.
 
-        Returns:
-            pd.DataFrame: Returns The Ledger, with optional additional information.
+        Returns
+        -------
+        pd.DataFrame
+            The Ledger, with optional additional information.
         """
         if len(self._ledger_df) == 0:
             warnings.warn('WARNING: Ledger is empty, showing only basic structure.')
 
         the_ledger = self._ledger_df
+
+        if instrument_type is True or instrument_name is True:
+            instruments = self.instruments(
+                instrument_type=instrument_type,
+                instrument_name=instrument_name,
+                instrument_in_ledger=False,
+            )
+            the_ledger = pd.merge(the_ledger, instruments, how='left', on='instrument')
 
         if simplify_dtypes is True:
             with pd.option_context('future.no_silent_downcasting', True):
@@ -302,12 +299,17 @@ class SimplePortfolioLedger:
     def cols_operation(self, show_instr_accnt=False, simplify_dtypes=True) -> pd.DataFrame:
         """Returns a dataframe with 1 column per operation.
 
-        Args:
-            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
-            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+        Parameters
+        ----------
+        show_instr_accnt : bool, optional
+            Whether or not to show the instrument and the account. By default False.
+        simplify_dtypes : bool, optional
+            Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. By default True.
 
-        Returns:
-            pd.DataFrame: Returns a dataframe with 1 column per operation.
+        Returns
+        -------
+        pd.DataFrame
+            A dataframe with 1 column per operation.
         """
 
         if len(self._ledger_df) == 0:
@@ -360,12 +362,17 @@ class SimplePortfolioLedger:
     def cols_operation_cumsum(self, show_instr_accnt=False, simplify_dtypes=True) -> pd.DataFrame:
         """Returns a DataFrame with one column per operation but do a cumsum per instrument/account.
 
-        Args:
-            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
-            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+        Parameters
+        ----------
+        show_instr_accnt : bool, optional
+            Whether or not to show the instrument and the account. By default False.
+        simplify_dtypes : bool, optional
+            Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. By default True.
 
-        Returns:
-            pd.DataFrame: Returns a DataFrame with one column per operation but do a cumsum per instrument/operation/account.
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame with one column per operation but do a cumsum per instrument/operation/account.
         """
 
         # List of columns to return, SORTED by self._ops_names
@@ -621,12 +628,17 @@ class SimplePortfolioLedger:
     ) -> pd.DataFrame:
         """Returns a DataFrame with a balance per operation per instrument/account.
 
-        Args:
-            show_instr_accnt (bool, optional): Whether or not to show the instrument and the account. Defaults to False.
-            simplify_dtypes (bool, optional): Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. Defaults to True.
+        Parameters
+        ----------
+        show_instr_accnt : bool, optional
+            Whether or not to show the instrument and the account. By default False.
+        simplify_dtypes : bool, optional
+            Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present. Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . Warning: Might have a performance impact if True. By default True.
 
-        Returns:
-            pd.DataFrame: Returns a DataFrame with a balance per operation per instrument/account.
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame with a balance per operation per instrument/account.
         """
 
         new_columns = [
@@ -700,14 +712,13 @@ class SimplePortfolioLedger:
             return to_return[[*new_columns]]
 
     def rm_empty_rows(self):
-        # Remove empty rows (where everything is filled with na)
+        """Remove empty rows (where everything is filled with na)."""
         self._ledger_df.drop(
             self._ledger_df[self._ledger_df.isna().all(axis=1)].index,
             inplace=True,
         )
 
     # *****************
-    # Ledger Operations
     # MARK: Ledger Operations
     # *****************
 
@@ -726,8 +737,6 @@ class SimplePortfolioLedger:
         date_execution,
         instrument,
         amount,
-        instrument_name,
-        instrument_type,
         account,
         date_order=None,
         description='',
@@ -737,16 +746,22 @@ class SimplePortfolioLedger:
 
         Important: Deposit means a instrument entering an account. A commission or tax for a deposit is not possible, create a new operation for that purpose after doing the deposit.
 
-        Args:
-            date_execution (_type_): _description_
-            instrument (_type_): _description_
-            amount (_type_): _description_
-            instrument_name (_type_): _description_
-            instrument_type (_type_): _description_
-            account (_type_): _description_
-            date_order (_type_, optional): _description_. Defaults to None.
-            description (str, optional): _description_. Defaults to ''.
-            notes (str, optional): _description_. Defaults to ''.
+        Parameters
+        ----------
+        date_execution : _type_
+            Deposit execution date.
+        instrument : _type_
+            Deposit instrument.
+        amount : _type_
+            Deposit amount.
+        account : _type_
+            Deposit account.
+        date_order : _type_, optional
+            Deposit order date, if not set, uses `date_execution`. By default None.
+        description : str, optional
+            Deposit description. By default ''.
+        notes : str, optional
+            Deposit notes. By default ''.
         """
         self._add_row(
             {
@@ -763,8 +778,6 @@ class SimplePortfolioLedger:
                 'tax': 0,
                 'stated_total': amount,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'instrument_name': instrument_name,
-                'instrument_type': instrument_type,
                 'description': description,
                 'notes': notes,
                 'commission_notes': '',
@@ -794,13 +807,32 @@ class SimplePortfolioLedger:
         date_execution,
         instrument,
         amount,
-        instrument_name,
-        instrument_type,
         account,
         date_order=None,
         description='',
         notes='',
     ):
+        """Creates a new row with a withdraw.
+
+        Important: Withdraw means a instrument exiting an account. A commission or tax for a withdraw is not possible, create a new operation for that purpose after doing the withdraw.
+
+        Parameters
+        ----------
+        date_execution : _type_
+            Withdraw execution date.
+        instrument : _type_
+            Withdraw instrument.
+        amount : _type_
+            Withdraw amount.
+        account : _type_
+            Withdraw account.
+        date_order : _type_, optional
+            Withdraw order date, if not set, uses `date_execution`. By default None.
+        description : str, optional
+            Withdraw description. By default ''.
+        notes : str, optional
+            Withdraw notes. By default ''.
+        """        
         self._add_row(
             {
                 'date_execution': date_execution,
@@ -816,8 +848,6 @@ class SimplePortfolioLedger:
                 'tax': 0,
                 'stated_total': -amount,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'instrument_name': instrument_name,
-                'instrument_type': instrument_type,
                 'description': description,
                 'notes': notes,
                 'commission_notes': '',
@@ -825,4 +855,175 @@ class SimplePortfolioLedger:
                 'account': account,
                 'Q_price_commission_tax_verification': 0,
             }
+        )
+
+    # *****************
+    # MARK: METADATA
+    # *****************
+
+    def get_present_instruments(self) -> np.ndarray:
+        """Returns present instruments in the ledger.
+
+        Returns
+        -------
+        np.ndarray
+            Present instruments in the ledger.
+        """
+        return self._ledger_df['instrument'].unique()
+
+    def get_present_operations(self) -> np.ndarray:
+        """Returns present operations in the ledger.
+
+        Returns
+        -------
+        np.ndarray
+            Present operations in the ledger.
+        """
+        return self._ledger_df['operation'].unique()
+
+    def get_instruments_metadata(self) -> dict:
+        """Returns a dictionary of instruments' metadata.
+
+        The returned format is the following:
+        ```json
+        {instrument_name:
+            {'type': instrument_type,
+            'name': instrument_name}}
+        ```
+
+        For example:
+        ```json
+        {
+            'AAPL': {'name': 'Apple Inc.', 'type': 'stock'},
+            'USD': {'name': 'USA Dollar', 'type': 'cash'},
+        }
+        ```
+
+        Returns
+        -------
+        dict
+            Dictionary of instruments' metadata.
+        """
+        return self._instruments_metadata
+
+    def set_instruments_metadata(self, instuments_metadata: dict) -> None:
+        """Set instruments' metadata.
+
+        Parameters
+        ----------
+        instuments_metadata : dict
+            The required format is the following:👍🏼
+            ```json
+            {instrument_name:
+                {'type': instrument_type,
+                'name': instrument_name}}
+            ```
+
+            For example:
+            ```json
+            {
+                'AAPL': {'name': 'Apple Inc.', 'type': 'stock'},
+                'USD': {'name': 'USA Dollar', 'type': 'cash'},
+            }
+            ```
+        """
+        extraneous_instruments = set(instuments_metadata.keys()) - set(
+            self.get_present_instruments()
+        )
+        if len(extraneous_instruments) > 0:
+            warnings.warn(
+                'Some instruments provided in the dict are not present in the ledger: '
+                + f'{str(extraneous_instruments)}'
+                + ' (still, storing all in the instruments metadata).',
+                stacklevel=2,
+            )
+        for instr, metadata in instuments_metadata.items():
+            if not isinstance(metadata, dict):
+                continue
+            if metadata.get('name') is not None:  # Does not override
+                namedict = {'name': metadata['name']}
+            if metadata.get('type') is not None:  # Does not override
+                typedict = {'type': metadata['type']}
+            self._instruments_metadata[instr] = {**namedict, **typedict}
+
+    def rm_instruments_metadata(self, instruments: str | List[str]) -> None:
+        """Remove instrument(s) from the metadata.
+
+        Args:
+            instruments (str | List[str]):
+                If a string, it removes the instrument from the metadata.
+
+                If a list, it removes each instrument in the list from the metadata.
+        """
+        if isinstance(instruments, str):
+            self._instruments_metadata.pop(instruments, None)
+        if isinstance(instruments, list):
+            for instr in instruments:
+                if isinstance(instr, str):
+                    self._instruments_metadata.pop(instr, None)
+
+    def instruments(
+        self,
+        instrument_type: bool = True,
+        instrument_name: bool = True,
+        instrument_in_ledger: bool = True,
+    ) -> pd.DataFrame:
+        """Returns instruments present in the ledger and in the instruments' metadata.
+
+        The instrument present in the ledger are those that take part in a transaction in the column 'instrument'.
+
+        Some instruments might be present in the instruments' metadata and not in the ledger, those are also returned.
+
+        Parameters
+        ----------
+        instrument_type : bool, optional
+            Whether to return the types in an 'instrument_type' column. By default True.
+        instrument_name : bool, optional
+            Whether to return the names in an 'instrument_name' column. By default True.
+        instrument_in_ledger : bool, optional
+            Whether to return a column 'in_ledger' specifying if an instrument is in the ledger or not. By default True.
+
+        Returns
+        -------
+        pd.DataFrame
+            _description_
+        """
+        instruments_set = set([*self.get_present_instruments(), *self._instruments_metadata.keys()])
+
+        dfs_toconcat = [pd.DataFrame(instruments_set, columns=['instrument'])]
+
+        if instrument_type is True:
+            rows_types = []
+            for instr in instruments_set:
+                metadata = self._instruments_metadata.get(instr)
+                instr_type = metadata.get('type', '') if isinstance(metadata, dict) else ''
+                rows_types.append([instr_type])
+            dfs_toconcat.append(pd.DataFrame(rows_types, columns=['instrument_type']))
+
+        if instrument_name is True:
+            rows_names = []
+            for instr in instruments_set:
+                metadata = self._instruments_metadata.get(instr)
+                instr_name = metadata.get('name', '') if isinstance(metadata, dict) else ''
+                rows_names.append([instr_name])
+            dfs_toconcat.append(pd.DataFrame(rows_names, columns=['instrument_name']))
+
+        if instrument_in_ledger is True:
+            extraneous_instruments = set(self._instruments_metadata.keys()) - set(
+                self.get_present_instruments()
+            )
+            rows_extraneous = []
+            for instr in instruments_set:
+                is_extraneous = False if instr in extraneous_instruments else True
+                rows_extraneous.append([is_extraneous])
+            dfs_toconcat.append(pd.DataFrame(rows_extraneous, columns=['in_ledger']))
+
+        return (
+            pd
+            # Join DataFrames
+            .concat(dfs_toconcat, join='inner', axis=1)
+            # Try to pass colums where dtype is object to a type like int64 or float64
+            .infer_objects()
+            .sort_values('instrument')
+            .reset_index(drop=True)
         )
