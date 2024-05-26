@@ -16,24 +16,26 @@ Notes:
 # MARK: TODO LIST
 # TODO
 _ = '''
-- For all operations
-    - Add type validation
+- Implement operations
 - Add a new column for operation id and sub id?
     - For instance, a sell is an univest and a sell, so both ops should have an id
         e.g. 132 and maybe a sub id 1 and 2
         these could go on different columns or in one column (132-1 and 132-2)
     - The function `_add_row()` should be _add_rows (plural) to allow operation tracking and multiple rows would have the same operation id and multiple sub ids.
+    - _add_rows should return the operation id (the main one, not sub ids)
+- Add validation for _add_rows
+- Remove column `Q_price_commission_tax_verification`.
+- Change name to column `stated_total` to `total`, this makes more sense as it will be calculated and not stated.
 - In _cols_operation* the grouping should include price_in as the computation of the same instrument with different reference instrument (price_in) wouldn't make sense (i.e. a stock bought in USD and also in CHF wouldn't allow for the computation to be consistent between the two). In the case that would be needed to be done somehow, a conversion would have to happen.
 - Deposit/withdraw
     - If there's a cost should be stated as another operation
     - No commission/tax, add another op for that
     - Only an amount should be deposited or withdrew
-
+- In _cols_operation_balance_by_instrument_for_group(), for withdraw and sell there should be a final review. If withdraw/sell is more than what I have deposit should have a negative number to show an over withdraw or sell
 - Review _ledger_columns_attrs.
-- In _cols_operation_balance_by_instrument_for_group(), for withdraw and sell
-    there should be a final review. If withdraw/sell is more than what I have
-    deposit should have a negative number to show an over withdraw or sell
-IDEAS: 
+    
+
+++ IDEAS: 
 - There should be cost operations, probably with a 'pay_' prefix:
     - pay_deposit
     - pay_withdraw
@@ -728,8 +730,81 @@ class SimplePortfolioLedger:
             .reset_index(drop=True)
         )
 
-    def buy(self):
-        pass
+    # This a two row operation
+    def buy(
+        self,
+        date_execution,
+        instrument,
+        price_in,
+        price,
+        size,
+        account,
+        commission=0,
+        tax=0,
+        stated_total=None,
+        date_order=None,
+        description='',
+        notes='',
+        commission_notes='',
+        tax_notes='',
+    ):
+        """
+        REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
+        """
+        calculated_total = size * price + commission + tax
+
+        if stated_total is not None and stated_total != calculated_total:
+            raise ValueError(
+                'When adding a buy operation, '
+                + 'the stated total is different from the calculated total.'
+            )
+
+        price_w_expenses = calculated_total / size
+
+        op_1 = {}  # invest
+        op_2 = {}  # buy
+        op_1['date_execution'] = date_execution  # invest
+        op_2['date_execution'] = date_execution  # buy
+        op_1['operation'] = 'invest'  # invest
+        op_2['operation'] = 'buy'  # buy
+        op_1['instrument'] = price_in  # invest
+        op_2['instrument'] = instrument  # buy
+        op_1['origin'] = ''  # invest
+        op_2['origin'] = price_in  # buy
+        op_1['destination'] = instrument  # invest
+        op_2['destination'] = ''  # buy
+        op_1['price_in'] = price_in  # invest
+        op_2['price_in'] = price_in  # buy
+        op_1['price'] = 1  # invest
+        op_2['price'] = price  # buy
+        op_1['price_w_expenses'] = 1  # invest
+        op_2['price_w_expenses'] = price_w_expenses
+        op_1['size'] = -1 * calculated_total  # invest
+        op_2['size'] = size  # buy
+        op_1['commission'] = 0  # invest
+        op_2['commission'] = commission  # buy
+        op_1['tax'] = 0  # invest
+        op_2['tax'] = tax  # buy
+        op_1['stated_total'] = -1 * calculated_total  # invest
+        op_2['stated_total'] = calculated_total  # buy
+        op_1['date_order'] = date_order if date_order is not None else date_execution  # invest
+        op_2['date_order'] = date_order if date_order is not None else date_execution  # buy
+        op_1['description'] = description  # invest
+        op_2['description'] = description  # buy
+        op_1['notes'] = notes  # invest
+        op_2['notes'] = notes  # buy
+        op_1['commission_notes'] = commission_notes  # invest
+        op_2['commission_notes'] = commission_notes  # buy
+        op_1['tax_notes'] = tax_notes  # invest
+        op_2['tax_notes'] = tax_notes  # buy
+        op_1['account'] = account  # invest
+        op_2['account'] = account  # buy
+        op_1['Q_price_commission_tax_verification'] = 'NOT USED: REMOVE'  # invest # <<<< TODO >>>>
+        op_2['Q_price_commission_tax_verification'] = 'NOT USED: REMOVE'  # buy # <<<< TODO >>>>
+
+        # Create rows
+        self._add_row(op_1)
+        self._add_row(op_2)
 
     def deposit(
         self,
@@ -782,7 +857,7 @@ class SimplePortfolioLedger:
                 'commission_notes': '',
                 'tax_notes': '',
                 'account': account,
-                'Q_price_commission_tax_verification': 0,
+                'Q_price_commission_tax_verification': 'NOT USED: REMOVE',  # <<<< TODO >>>>
             }
         )
 
@@ -852,7 +927,7 @@ class SimplePortfolioLedger:
                 'commission_notes': '',
                 'tax_notes': '',
                 'account': account,
-                'Q_price_commission_tax_verification': 0,
+                'Q_price_commission_tax_verification': 'NOT USED: REMOVE',  # <<<< TODO >>>>
             }
         )
 
