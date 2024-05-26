@@ -1,8 +1,4 @@
 {
-    "pylint.args": [
-        "--disable=W0212",
-        "--disable=W0105",
-    ],
     "cSpell.diagnosticLevel": "Hint",
     "black-formatter.args": [
         "--skip-string-normalization",
