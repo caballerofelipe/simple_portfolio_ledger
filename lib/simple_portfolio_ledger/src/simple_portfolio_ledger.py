@@ -8,14 +8,10 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-'''
-Notes:
-- MARK is a functionality from Visual Studio Code to find things in the minimap.
-'''
+# Notes: MARK is a functionality from Visual Studio Code to find things in the minimap.
 
 # MARK: TODO LIST
-# TODO
-_ = '''
+'''
 - Implement operations
 - Add a new column for operation id and sub id?
     - For instance, a sell is an univest and a sell, so both ops should have an id

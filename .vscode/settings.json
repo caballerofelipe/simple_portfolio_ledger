@@ -1,5 +1,14 @@
 {
-    "cSpell.diagnosticLevel": "Hint",
+    "pylint.args": [
+        // "--disable=W0212", // Protected Access
+        // "--disable=W0105", // Pointless String Statement
+        // "--disable=C0301", // Line too long
+        // "--disable=C0302", // Too many lines
+        // "--disable=C0115", // Missing Class Docstring
+        // "--disable=C0116", // Missing Function Docstring
+    ],
+    // ↓ Change to "Hint" to not show spell checker in problems
+    "cSpell.diagnosticLevel": "Information",
     "black-formatter.args": [
         "--skip-string-normalization",
         "--line-length=100"
