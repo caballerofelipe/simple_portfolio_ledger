@@ -32,7 +32,6 @@ class SimplePortfolioLedger:
         'commission_notes',
         'tax_notes',
         'account',
-        'Q_price_commission_tax_verification',
     )
 
     # Column description in a dict
@@ -62,8 +61,6 @@ class SimplePortfolioLedger:
             # These columns would allow me to have just one file for all my investments
             #   but might make the process more cumbersome
             'account': 'Account where the transaction was done.',
-            # Debugging
-            'Q_price_commission_tax_verification': '',
         }
     }
 
@@ -765,8 +762,6 @@ class SimplePortfolioLedger:
         op_2['tax_notes'] = tax_notes  # buy
         op_1['account'] = account  # invest
         op_2['account'] = account  # buy
-        op_1['Q_price_commission_tax_verification'] = 'NOT USED: REMOVE'  # invest # <<<< TODO >>>>
-        op_2['Q_price_commission_tax_verification'] = 'NOT USED: REMOVE'  # buy # <<<< TODO >>>>
 
         # Create rows
         self._add_row(op_1)
@@ -823,7 +818,6 @@ class SimplePortfolioLedger:
                 'commission_notes': '',
                 'tax_notes': '',
                 'account': account,
-                'Q_price_commission_tax_verification': 'NOT USED: REMOVE',  # <<<< TODO >>>>
             }
         )
 
@@ -893,7 +887,6 @@ class SimplePortfolioLedger:
                 'commission_notes': '',
                 'tax_notes': '',
                 'account': account,
-                'Q_price_commission_tax_verification': 'NOT USED: REMOVE',  # <<<< TODO >>>>
             }
         )
 

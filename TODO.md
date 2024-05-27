@@ -7,7 +7,6 @@
     - The function `_add_row()` should be _add_rows (plural) to allow operation tracking and multiple rows would have the same operation id and multiple sub ids.
     - _add_rows should return the operation id (the main one, not sub ids)
 - Add validation for _add_rows
-- Remove column `Q_price_commission_tax_verification`.
 - Change column name `stated_total` to `total`, this makes more sense as it will be calculated and not stated.
 - In _cols_operation* the grouping should include price_in as the computation of the same instrument with different reference instrument (price_in) wouldn't make sense (i.e. a stock bought in USD and also in CHF wouldn't allow for the computation to be consistent between the two). In the case that would be needed to be done somehow, a conversion would have to happen.
 - Deposit/withdraw
