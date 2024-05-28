@@ -718,7 +718,7 @@ class SimplePortfolioLedger:
 
         if stated_total is not None and stated_total != calculated_total:
             raise ValueError(
-                'When adding a buy operation, '
+                'When adding buy operation, '
                 + 'the stated total is different from the calculated total.'
             )
 
@@ -764,8 +764,8 @@ class SimplePortfolioLedger:
         op_2['account'] = account  # buy
 
         # Create rows
-        self._add_row(op_1)
-        self._add_row(op_2)
+        self._add_row(op_1)  # invest
+        self._add_row(op_2)  # buy
 
     def deposit(
         self,
@@ -824,16 +824,80 @@ class SimplePortfolioLedger:
     def dividend(self):
         pass
 
-    def invest(self):
-        pass
+    def sell(
+        self,
+        date_execution,
+        instrument,
+        price_in,
+        price,
+        size,
+        account,
+        commission=0,
+        tax=0,
+        stated_total=None,
+        date_order=None,
+        description='',
+        notes='',
+        commission_notes='',
+        tax_notes='',
+    ):
+        """
+        REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
+        """
+        calculated_total = size * price - commission - tax
 
-    def sell(self):
-        pass
+        if stated_total is not None and stated_total != calculated_total:
+            raise ValueError(
+                'When adding sell operation, '
+                + 'the stated total is different from the calculated total.'
+            )
+
+        price_w_expenses = calculated_total / size
+
+        op_1 = {}  # sell
+        op_2 = {}  # uninvest
+        op_1['date_execution'] = date_execution  # sell
+        op_2['date_execution'] = date_execution  # uninvest
+        op_1['operation'] = 'sell'  # sell
+        op_2['operation'] = 'uninvest'  # uninvest
+        op_1['instrument'] = instrument  # sell
+        op_2['instrument'] = price_in  # uninvest
+        op_1['origin'] = ''  # sell
+        op_2['origin'] = instrument  # uninvest
+        op_1['destination'] = price_in  # sell
+        op_2['destination'] = ''  # uninvest
+        op_1['price_in'] = price_in  # sell
+        op_2['price_in'] = price_in  # uninvest
+        op_1['price'] = price  # sell
+        op_2['price'] = 1  # uninvest
+        op_1['price_w_expenses'] = price_w_expenses  # sell
+        op_2['price_w_expenses'] = 1
+        op_1['size'] = -1 * size  # sell
+        op_2['size'] = calculated_total  # uninvest
+        op_1['commission'] = commission  # sell
+        op_2['commission'] = 0  # uninvest
+        op_1['tax'] = tax  # sell
+        op_2['tax'] = 0  # uninvest
+        op_1['stated_total'] = -1 * calculated_total  # sell
+        op_2['stated_total'] = calculated_total  # uninvest
+        op_1['date_order'] = date_order if date_order is not None else date_execution  # sell
+        op_2['date_order'] = date_order if date_order is not None else date_execution  # uninvest
+        op_1['description'] = description  # sell
+        op_2['description'] = description  # uninvest
+        op_1['notes'] = notes  # sell
+        op_2['notes'] = notes  # uninvest
+        op_1['commission_notes'] = commission_notes  # sell
+        op_2['commission_notes'] = commission_notes  # uninvest
+        op_1['tax_notes'] = tax_notes  # sell
+        op_2['tax_notes'] = tax_notes  # uninvest
+        op_1['account'] = account  # sell
+        op_2['account'] = account  # uninvest
+
+        # Create rows
+        self._add_row(op_1)  # sell
+        self._add_row(op_2)  # uninvest
 
     def stock_dividend(self):
-        pass
-
-    def uninvest(self):
         pass
 
     def withdraw(

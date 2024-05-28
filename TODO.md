@@ -1,5 +1,6 @@
 # TODO LIST
 - Implement operations
+    - Maybe the operation column in the ledger should be called differently, perhaps action. The reason being that operations might be the things that are done via the API and they might hace two events happening such as sell (selling and univesting).
 - Add a new column for operation id and sub id?
     - For instance, a sell is an univest and a sell, so both ops should have an id
         e.g. 132 and maybe a sub id 1 and 2
@@ -27,3 +28,4 @@
     - pay_tax
     - pay_transfer
     -account_cost
+- Possibly, origin and destination should always be filled. For instance in a sell operation, origin for the sell part would be the instrument itself.
