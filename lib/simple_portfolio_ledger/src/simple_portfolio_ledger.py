@@ -798,7 +798,7 @@ class SimplePortfolioLedger:
         notes : str, optional
             Deposit notes. By default ''.
         """
-        self._add_row(
+        self._add_row(  # deposit
             {
                 'date_execution': date_execution,
                 'operation': 'deposit',
@@ -821,8 +821,39 @@ class SimplePortfolioLedger:
             }
         )
 
-    def dividend(self):
-        pass
+    def dividend(
+        self,
+        date_execution,
+        instrument_from,
+        instrument_received,
+        amount,
+        account,
+        date_order=None,
+        description='',
+        notes='',
+    ):
+        self._add_row(  # dividend
+            {
+                'date_execution': date_execution,
+                'operation': 'dividend',
+                'instrument': instrument_received,
+                'origin': instrument_from,
+                'destination': '',
+                'price_in': instrument_received,
+                'price': 1,
+                'price_w_expenses': 1,
+                'size': amount,
+                'commission': 0,
+                'tax': 0,
+                'stated_total': amount,
+                'date_order': (date_order if date_order is not None else date_execution),
+                'description': description,
+                'notes': notes,
+                'commission_notes': '',
+                'tax_notes': '',
+                'account': account,
+            }
+        )
 
     def sell(
         self,
@@ -897,8 +928,38 @@ class SimplePortfolioLedger:
         self._add_row(op_1)  # sell
         self._add_row(op_2)  # uninvest
 
-    def stock_dividend(self):
-        pass
+    def stock_dividend(
+        self,
+        date_execution,
+        instrument,
+        amount,
+        account,
+        date_order=None,
+        description='',
+        notes='',
+    ):
+        self._add_row(  # stock dividend
+            {
+                'date_execution': date_execution,
+                'operation': 'stock dividend',
+                'instrument': instrument,
+                'origin': instrument,
+                'destination': '',
+                'price_in': instrument,
+                'price': 0,
+                'price_w_expenses': 0,
+                'size': amount,
+                'commission': 0,
+                'tax': 0,
+                'stated_total': 0,
+                'date_order': (date_order if date_order is not None else date_execution),
+                'description': description,
+                'notes': notes,
+                'commission_notes': '',
+                'tax_notes': '',
+                'account': account,
+            }
+        )
 
     def withdraw(
         self,
@@ -931,7 +992,7 @@ class SimplePortfolioLedger:
         notes : str, optional
             Withdraw notes. By default ''.
         """
-        self._add_row(
+        self._add_row(  # Withdraw
             {
                 'date_execution': date_execution,
                 'operation': 'withdraw',
