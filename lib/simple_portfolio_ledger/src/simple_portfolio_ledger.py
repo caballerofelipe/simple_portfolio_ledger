@@ -131,7 +131,7 @@ class SimplePortfolioLedger:
         elif isinstance(columns, str):
             return cls._ledger_columns_attrs['column notes'].get(columns, 'NOT DEFINED')
         else:
-            warnings.warn('Columns must be list or str. Returning None.')
+            warnings.warn('Columns must be list or str. Returning None.', stacklevel=2)
             return None
 
     @classmethod
@@ -203,7 +203,7 @@ class SimplePortfolioLedger:
             The Ledger, with optional additional information.
         """
         if len(self._ledger_df) == 0:
-            warnings.warn('WARNING: Ledger is empty, showing only basic structure.')
+            warnings.warn('WARNING: Ledger is empty, showing only basic structure.', stacklevel=2)
 
         # Specifying columns to avoid returning manually added columns
         # `*` needed because self._ledger_columns is a tuple
@@ -706,21 +706,38 @@ class SimplePortfolioLedger:
         tax=0,
         stated_total=None,
         date_order=None,
-        description='',
         notes='',
         commission_notes='',
         tax_notes='',
+        tolerance_decimals=4,
     ):
         """
         REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
         """
         calculated_total = size * price + commission + tax
 
-        if stated_total is not None and stated_total != calculated_total:
-            raise ValueError(
-                'When adding buy operation, '
-                + 'the stated total is different from the calculated total.'
+        # Allow inconsistencies up to 4 decimals
+        if stated_total is not None and not (
+            abs(stated_total - calculated_total) < 10**-tolerance_decimals
+        ):
+            error_msg = ''.join(
+                [
+                    'When adding buy operation, '
+                    + 'the stated total is different from the calculated total. '
+                    + f'By more than the minimum of {10**-tolerance_decimals}.'
+                ]
             )
+            error_dict = {
+                'date_execution': date_execution,
+                'instrument': instrument,
+                'stated_total': stated_total,
+                'size': size,
+                'price': price,
+                'commission': commission,
+                'tax': tax,
+                'calculated_total': calculated_total,
+            }
+            raise ValueError(error_msg, error_dict)
 
         price_w_expenses = calculated_total / size
 
@@ -751,9 +768,9 @@ class SimplePortfolioLedger:
         op_1['stated_total'] = -1 * calculated_total  # invest
         op_2['stated_total'] = calculated_total  # buy
         op_1['date_order'] = date_order if date_order is not None else date_execution  # invest
-        op_2['date_order'] = date_order if date_order is not None else date_execution  # buy
-        op_1['description'] = description  # invest
-        op_2['description'] = description  # buy
+        op_2['date_order'] = date_execution  # buy
+        op_1['description'] = f'Invest in {instrument}.'  # invest
+        op_2['description'] = f'Buy {instrument}.'  # buy
         op_1['notes'] = notes  # invest
         op_2['notes'] = notes  # buy
         op_1['commission_notes'] = commission_notes  # invest
@@ -774,7 +791,6 @@ class SimplePortfolioLedger:
         amount,
         account,
         date_order=None,
-        description='',
         notes='',
     ):
         """Creates a new row with a deposit.
@@ -813,7 +829,7 @@ class SimplePortfolioLedger:
                 'tax': 0,
                 'stated_total': amount,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'description': description,
+                'description': f'Deposit {instrument}.',
                 'notes': notes,
                 'commission_notes': '',
                 'tax_notes': '',
@@ -829,9 +845,25 @@ class SimplePortfolioLedger:
         amount,
         account,
         date_order=None,
-        description='',
         notes='',
     ):
+        size = self._ledger_df.query(
+            f'instrument == "{instrument_from}" and date_execution <= "{date_execution}"'
+        )['size'].sum()
+
+        if size == 0:
+            raise ValueError(
+                ' '.join(
+                    [
+                        'When doing operation "dividend",',
+                        f'the calculated size of held instrument {instrument_from} is 0.',
+                        'This could mean there are no previous operations for the instrument',
+                        'or the sum of all operations is 0. Check the ledger.',
+                    ]
+                )
+            )
+
+        price = amount / size
         self._add_row(  # dividend
             {
                 'date_execution': date_execution,
@@ -840,14 +872,14 @@ class SimplePortfolioLedger:
                 'origin': instrument_from,
                 'destination': '',
                 'price_in': instrument_received,
-                'price': 1,
-                'price_w_expenses': 1,
-                'size': amount,
+                'price': price,
+                'price_w_expenses': price,
+                'size': size,
                 'commission': 0,
                 'tax': 0,
                 'stated_total': amount,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'description': description,
+                'description': f'Dividend from {instrument_from}.',
                 'notes': notes,
                 'commission_notes': '',
                 'tax_notes': '',
@@ -867,21 +899,38 @@ class SimplePortfolioLedger:
         tax=0,
         stated_total=None,
         date_order=None,
-        description='',
         notes='',
         commission_notes='',
         tax_notes='',
+        tolerance_decimals=4,
     ):
         """
         REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
         """
         calculated_total = size * price - commission - tax
 
-        if stated_total is not None and stated_total != calculated_total:
-            raise ValueError(
-                'When adding sell operation, '
-                + 'the stated total is different from the calculated total.'
+        # Allow inconsistencies up to 4 decimals
+        if stated_total is not None and not (
+            abs(stated_total - calculated_total) < 10**-tolerance_decimals
+        ):
+            error_msg = ''.join(
+                [
+                    'When adding sell operation, '
+                    + 'the stated total is different from the calculated total. '
+                    + f'By more than the minimum of {10**-tolerance_decimals}.'
+                ]
             )
+            error_dict = {
+                'date_execution': date_execution,
+                'instrument': instrument,
+                'stated_total': stated_total,
+                'size': size,
+                'price': price,
+                'commission': commission,
+                'tax': tax,
+                'calculated_total': calculated_total,
+            }
+            raise ValueError(error_msg, error_dict)
 
         price_w_expenses = calculated_total / size
 
@@ -912,9 +961,9 @@ class SimplePortfolioLedger:
         op_1['stated_total'] = -1 * calculated_total  # sell
         op_2['stated_total'] = calculated_total  # uninvest
         op_1['date_order'] = date_order if date_order is not None else date_execution  # sell
-        op_2['date_order'] = date_order if date_order is not None else date_execution  # uninvest
-        op_1['description'] = description  # sell
-        op_2['description'] = description  # uninvest
+        op_2['date_order'] = date_execution  # uninvest
+        op_1['description'] = f'Sell {instrument}.'  # sell
+        op_2['description'] = f'Uninvest in {instrument}.'  # uninvest
         op_1['notes'] = notes  # sell
         op_2['notes'] = notes  # uninvest
         op_1['commission_notes'] = commission_notes  # sell
@@ -932,10 +981,10 @@ class SimplePortfolioLedger:
         self,
         date_execution,
         instrument,
-        amount,
+        price_in,
+        size,
         account,
         date_order=None,
-        description='',
         notes='',
     ):
         self._add_row(  # stock dividend
@@ -945,15 +994,15 @@ class SimplePortfolioLedger:
                 'instrument': instrument,
                 'origin': instrument,
                 'destination': '',
-                'price_in': instrument,
+                'price_in': price_in,
                 'price': 0,
                 'price_w_expenses': 0,
-                'size': amount,
+                'size': size,
                 'commission': 0,
                 'tax': 0,
                 'stated_total': 0,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'description': description,
+                'description': f'Stock dividend from {instrument}.',
                 'notes': notes,
                 'commission_notes': '',
                 'tax_notes': '',
@@ -968,7 +1017,6 @@ class SimplePortfolioLedger:
         amount,
         account,
         date_order=None,
-        description='',
         notes='',
     ):
         """Creates a new row with a withdraw.
@@ -1007,7 +1055,7 @@ class SimplePortfolioLedger:
                 'tax': 0,
                 'stated_total': -amount,
                 'date_order': (date_order if date_order is not None else date_execution),
-                'description': description,
+                'description': f'Withdraw {instrument}.',
                 'notes': notes,
                 'commission_notes': '',
                 'tax_notes': '',
@@ -1070,7 +1118,7 @@ class SimplePortfolioLedger:
         Parameters
         ----------
         instuments_metadata : dict
-            The required format is the following:👍🏼
+            The required format is the following:
             ```json
             {instrument_name:
                 {'type': instrument_type,

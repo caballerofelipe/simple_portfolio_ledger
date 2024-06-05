@@ -19,6 +19,9 @@
 - Create automated unit tests:
     - Test if operations work as expected.
     - Test cols_operation* methods.
+- Save/Load ledger from file (CSV maybe or Excel or another custom format).
+- Maybe the description column is redundant and the name of the operation is enough. Or maybe be more explicit in the description, instead of 'Buy {instrument}' it could be 'Buy {instrument} in exchange for {price_in}'.
+- Maybe bring back a column 'Q_price_commission_tax_verification' with a different name and a different purpose. The column was removed to show where there were inconsistencies between a calculated and stated total, now that's not possible since an error is raised if such an inconsistency occurs if the `tolerance_decimals=4,` is surpassed. But since we are now using a tolerance setting to allow small inconsistencies, maybe a new column would be useful to showcase that small inconsistency.
     
 
 # IDEAS
