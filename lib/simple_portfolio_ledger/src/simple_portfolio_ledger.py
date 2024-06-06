@@ -14,6 +14,8 @@ import pandas as pd
 class SimplePortfolioLedger:
 
     _ledger_columns = (
+        'opid',
+        'subopid',
         'date_execution',
         'operation',
         'instrument',
@@ -37,6 +39,8 @@ class SimplePortfolioLedger:
     # Column description in a dict
     _ledger_columns_attrs = {
         'column notes': {
+            'opid': 'Operation id, used to keep track of multiple rows operations.',
+            'subopid': 'Sub operation id, used to keep track of sub operations.',
             'date_execution': 'The date the transaction was actually done.',
             'date_order': 'The date the transaction was created.',
             #
@@ -686,14 +690,59 @@ class SimplePortfolioLedger:
     # MARK: OPERATIONS
     # *****************
 
-    def _add_row(self, value_dict):
+    def _add_rows(self, data: dict | List[dict]) -> tuple[int, pd.DataFrame]:
+        """Add one or multiple rows to the ledger.
+
+        The new row(s) will have an opid incremented by one from the max opid in the ledger. Or it will be 0 if max is a nan.
+
+        Parameters
+        ----------
+        data : dict | List[dict]
+            The data to be added to the ledger. If a dict, the function adds only one row. If a list of dicts, the function adds as many items in the list.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
+
+        Raises
+        ------
+        ValueError
+            If data is a list and an item in that list is not a dict, an error is raised.
+        ValueError
+            If data is neither a dict nor a List, an error is raised.
+        """
+        row_list = []
+
+        # Get the last opid and set the one used for the next row
+        last_opid = self._ledger_df['opid'].max()
+        if pd.isna(last_opid):
+            new_op_id = 0
+        else:
+            new_op_id = int(last_opid) + 1
+
+        # Fill the array of rows to be added
+        if isinstance(data, dict):
+            row_list.append({**data, 'opid': new_op_id, 'subopid': 0})
+        elif isinstance(data, list):
+            for i, vd in enumerate(data):
+                if isinstance(vd, dict):
+                    row_list.append({**vd, 'opid': new_op_id, 'subopid': i})
+                else:
+                    raise ValueError('When creating a row, the item in the list is not a dict.')
+        else:
+            raise ValueError('Unsupported type for value_dict, must be a dict or a list of dicts.')
+
+        # Add rows to the ledger
+        # Specifying columns order, `*` needed because self._ledger_columns is a tuple
+        new_rows = pd.DataFrame(row_list)[[*self._ledger_columns]]
         self._ledger_df = (
-            pd.concat([self._ledger_df, pd.DataFrame([value_dict])])
+            pd.concat([self._ledger_df, new_rows])
             # Make the index coherent (else index might have duplicates)
             .reset_index(drop=True)
         )
+        return new_op_id, new_rows
 
-    # This a two row operation
     def buy(
         self,
         date_execution,
@@ -704,7 +753,7 @@ class SimplePortfolioLedger:
         account,
         commission=0,
         tax=0,
-        stated_total=None,
+        stated_total=None,  # Used to verify if inner calculation is correct
         date_order=None,
         notes='',
         commission_notes='',
@@ -780,9 +829,7 @@ class SimplePortfolioLedger:
         op_1['account'] = account  # invest
         op_2['account'] = account  # buy
 
-        # Create rows
-        self._add_row(op_1)  # invest
-        self._add_row(op_2)  # buy
+        return self._add_rows(data=[op_1, op_2])
 
     def deposit(
         self,
@@ -814,28 +861,28 @@ class SimplePortfolioLedger:
         notes : str, optional
             Deposit notes. By default ''.
         """
-        self._add_row(  # deposit
-            {
-                'date_execution': date_execution,
-                'operation': 'deposit',
-                'instrument': instrument,
-                'origin': '',
-                'destination': instrument,
-                'price_in': instrument,
-                'price': 1,
-                'price_w_expenses': 1,
-                'size': amount,
-                'commission': 0,
-                'tax': 0,
-                'stated_total': amount,
-                'date_order': (date_order if date_order is not None else date_execution),
-                'description': f'Deposit {instrument}.',
-                'notes': notes,
-                'commission_notes': '',
-                'tax_notes': '',
-                'account': account,
-            }
-        )
+        op_deposit = {
+            'date_execution': date_execution,
+            'operation': 'deposit',
+            'instrument': instrument,
+            'origin': '',
+            'destination': instrument,
+            'price_in': instrument,
+            'price': 1,
+            'price_w_expenses': 1,
+            'size': amount,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': amount,
+            'date_order': (date_order if date_order is not None else date_execution),
+            'description': f'Deposit {instrument}.',
+            'notes': notes,
+            'commission_notes': '',
+            'tax_notes': '',
+            'account': account,
+        }
+
+        return self._add_rows(op_deposit)
 
     def dividend(
         self,
@@ -864,28 +911,28 @@ class SimplePortfolioLedger:
             )
 
         price = amount / size
-        self._add_row(  # dividend
-            {
-                'date_execution': date_execution,
-                'operation': 'dividend',
-                'instrument': instrument_received,
-                'origin': instrument_from,
-                'destination': '',
-                'price_in': instrument_received,
-                'price': price,
-                'price_w_expenses': price,
-                'size': size,
-                'commission': 0,
-                'tax': 0,
-                'stated_total': amount,
-                'date_order': (date_order if date_order is not None else date_execution),
-                'description': f'Dividend from {instrument_from}.',
-                'notes': notes,
-                'commission_notes': '',
-                'tax_notes': '',
-                'account': account,
-            }
-        )
+        op_dividend = {
+            'date_execution': date_execution,
+            'operation': 'dividend',
+            'instrument': instrument_received,
+            'origin': instrument_from,
+            'destination': '',
+            'price_in': instrument_received,
+            'price': price,
+            'price_w_expenses': price,
+            'size': size,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': amount,
+            'date_order': (date_order if date_order is not None else date_execution),
+            'description': f'Dividend from {instrument_from}.',
+            'notes': notes,
+            'commission_notes': '',
+            'tax_notes': '',
+            'account': account,
+        }
+
+        return self._add_rows(op_dividend)
 
     def sell(
         self,
@@ -897,7 +944,7 @@ class SimplePortfolioLedger:
         account,
         commission=0,
         tax=0,
-        stated_total=None,
+        stated_total=None,  # Used to verify if inner calculation is correct
         date_order=None,
         notes='',
         commission_notes='',
@@ -973,9 +1020,7 @@ class SimplePortfolioLedger:
         op_1['account'] = account  # sell
         op_2['account'] = account  # uninvest
 
-        # Create rows
-        self._add_row(op_1)  # sell
-        self._add_row(op_2)  # uninvest
+        return self._add_rows(data=[op_1, op_2])
 
     def stock_dividend(
         self,
@@ -987,28 +1032,28 @@ class SimplePortfolioLedger:
         date_order=None,
         notes='',
     ):
-        self._add_row(  # stock dividend
-            {
-                'date_execution': date_execution,
-                'operation': 'stock dividend',
-                'instrument': instrument,
-                'origin': instrument,
-                'destination': '',
-                'price_in': price_in,
-                'price': 0,
-                'price_w_expenses': 0,
-                'size': size,
-                'commission': 0,
-                'tax': 0,
-                'stated_total': 0,
-                'date_order': (date_order if date_order is not None else date_execution),
-                'description': f'Stock dividend from {instrument}.',
-                'notes': notes,
-                'commission_notes': '',
-                'tax_notes': '',
-                'account': account,
-            }
-        )
+        op_stock_dividend = {
+            'date_execution': date_execution,
+            'operation': 'stock dividend',
+            'instrument': instrument,
+            'origin': instrument,
+            'destination': '',
+            'price_in': price_in,
+            'price': 0,
+            'price_w_expenses': 0,
+            'size': size,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': 0,
+            'date_order': (date_order if date_order is not None else date_execution),
+            'description': f'Stock dividend from {instrument}.',
+            'notes': notes,
+            'commission_notes': '',
+            'tax_notes': '',
+            'account': account,
+        }
+
+        return self._add_rows(op_stock_dividend)
 
     def withdraw(
         self,
@@ -1040,28 +1085,28 @@ class SimplePortfolioLedger:
         notes : str, optional
             Withdraw notes. By default ''.
         """
-        self._add_row(  # Withdraw
-            {
-                'date_execution': date_execution,
-                'operation': 'withdraw',
-                'instrument': instrument,
-                'origin': instrument,
-                'destination': '',
-                'price_in': instrument,
-                'price': 1,
-                'price_w_expenses': 1,
-                'size': -amount,
-                'commission': 0,
-                'tax': 0,
-                'stated_total': -amount,
-                'date_order': (date_order if date_order is not None else date_execution),
-                'description': f'Withdraw {instrument}.',
-                'notes': notes,
-                'commission_notes': '',
-                'tax_notes': '',
-                'account': account,
-            }
-        )
+        op_withdraw = {
+            'date_execution': date_execution,
+            'operation': 'withdraw',
+            'instrument': instrument,
+            'origin': instrument,
+            'destination': '',
+            'price_in': instrument,
+            'price': 1,
+            'price_w_expenses': 1,
+            'size': -amount,
+            'commission': 0,
+            'tax': 0,
+            'stated_total': -amount,
+            'date_order': (date_order if date_order is not None else date_execution),
+            'description': f'Withdraw {instrument}.',
+            'notes': notes,
+            'commission_notes': '',
+            'tax_notes': '',
+            'account': account,
+        }
+
+        return self._add_rows(op_withdraw)
 
     # *****************
     # MARK: METADATA
