@@ -358,7 +358,11 @@ class SimplePortfolioLedger:
             # Return an empty DataFrame with whe structure needed
             to_return = pd.DataFrame(
                 columns=[
-                    ['instrument', 'account', *ops_cumsum_names, 'cumsum held', 'cumsum invested']
+                    'instrument',
+                    'account',
+                    *ops_cumsum_names,
+                    'cumsum held',
+                    'cumsum invested',
                 ]
             )
         else:
