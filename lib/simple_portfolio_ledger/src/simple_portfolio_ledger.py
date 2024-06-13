@@ -1318,7 +1318,7 @@ class SimplePortfolioLedger:
         ----------
         path : _type_
             File path.
-        """        
+        """
         with pd.HDFStore(path, mode='r') as store:
             self._ledger_df = store.get('_ledger_df')
             self._instruments_metadata = store.get_storer('_ledger_df').attrs._instruments_metadata
