@@ -187,3 +187,6 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# .deleteme files, used for temporary work
+.deleteme*
