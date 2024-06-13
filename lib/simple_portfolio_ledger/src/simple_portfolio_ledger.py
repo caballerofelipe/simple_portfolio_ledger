@@ -1298,6 +1298,9 @@ class SimplePortfolioLedger:
             thousands_fmt_decimals=1,
         )
 
+        # From the documentation it appears that compression can be done in `pd.HDFStore()`
+        #  but from testing, even if the parameters exist, file size wasn't getting smaller
+        #  it even grew. So compression is done in `store.put()`.
         with pd.HDFStore(the_Path, mode='w') as store:
             store.put(
                 '_ledger_df',
