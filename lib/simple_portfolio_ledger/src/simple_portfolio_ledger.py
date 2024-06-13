@@ -249,11 +249,11 @@ class SimplePortfolioLedger:
             pd
             # Join DataFrames
             .concat(dfs_toconcat, join='inner', axis=1)
-            # Convert dates to datetime64[s]
+            # Convert dates to appropriate format
             .astype(
                 {
-                    'date_execution': 'datetime64[s]',
-                    'date_order': 'datetime64[s]',
+                    'date_execution': 'datetime64[ns]',
+                    'date_order': 'datetime64[ns]',
                 }
             )
             # Try to pass colums where dtype is object to a type like int64 or float64
