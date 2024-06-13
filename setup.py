@@ -23,9 +23,10 @@ setup(
     #     'Programming Language :: Python :: 3.10',
     #     'Operating System :: OS Independent',
     # ],
-    install_requires=['pandas>=2'], # Might need review
-    # extras_require={
-    #     'dev': ['pytest>=7.0', 'twine>=4.0.2'],
-    # },
-    python_requires='>=3',
+    install_requires=['pandas>=2', 'numpy>=1'], # Might need review
+    extras_require={
+        # 'dev': ['pytest>=7.0', 'twine>=4.0.2'],
+        'save_load': ['pytables>=3'],
+    },
+    python_requires='>=3.4',
 )

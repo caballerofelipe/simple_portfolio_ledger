@@ -3,6 +3,7 @@
 import functools
 import inspect
 import warnings
+import pathlib
 from typing import List
 
 import numpy as np
@@ -1255,3 +1256,69 @@ class SimplePortfolioLedger:
         )
 
         return self.simplify_dtypes(to_return)
+
+    # *****************
+    # MARK: I/O
+    # *****************
+
+    def save(self, path: str, overwrite: bool = False):
+        """Saves file to .spl extension, which includes the ledger and the instruments' metadata.
+
+        The .spl extension is used to keep track of the files used by this class, however, these files are actually HDF files.
+
+        Parameters
+        ----------
+        path : str
+            File path.
+        overwrite : bool, optional
+            Whether to overwrite the file specified in path if it exists.
+        """
+
+        the_Path = pathlib.Path(path)
+
+        if the_Path.is_dir():
+            raise ValueError(f'path [{path}] is a directory: aborting.')
+
+        if overwrite is False and the_Path.is_file():
+            raise ValueError(f'path [{path}] exists, overwrite is False: aborting.')
+
+        if the_Path.suffix != '.spl':
+            warnings.warn(
+                'Not using the .spl suffix. The .spl extension is recommended to keep track of this class\' files.',
+                stacklevel=2,
+            )
+
+        ledger_df = self.ledger(
+            instrument_type=False,
+            instrument_name=False,
+            cols_operation=False,
+            cols_operation_cumsum=False,
+            cols_operation_balance_by_instrument=False,
+            thousands_fmt_sep=False,
+            thousands_fmt_decimals=1,
+        )
+
+        with pd.HDFStore(the_Path, mode='w') as store:
+            store.put(
+                '_ledger_df',
+                ledger_df,
+                format='table',
+                complevel=9,
+                complib='zlib',
+            )
+            store.get_storer('_ledger_df').attrs._instruments_metadata = self._instruments_metadata
+
+    def load(
+        self,
+        path,
+    ):
+        """Loads a file created by this class, ideally with an .spl extension.
+
+        Parameters
+        ----------
+        path : _type_
+            File path.
+        """        
+        with pd.HDFStore(path, mode='r') as store:
+            self._ledger_df = store.get('_ledger_df')
+            self._instruments_metadata = store.get_storer('_ledger_df').attrs._instruments_metadata
