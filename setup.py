@@ -1,6 +1,3 @@
-# Some inspiration from:
-#   https://github.com/ArjanCodes/2023-package/blob/main/setup.py
-
 from setuptools import find_packages, setup
 
 with open('lib/README.md', 'r', encoding='utf-8') as f:
@@ -17,12 +14,12 @@ setup(
     # url='...',
     author='Felipe Caballero',
     # author_email='mail@mail.mail',
-    # license='MIT',
-    # classifiers=[
-    #     'License :: OSI Approved :: MIT License',
-    #     'Programming Language :: Python :: 3.10',
-    #     'Operating System :: OS Independent',
-    # ],
+    license='GPL-3.0',
+    classifiers=[
+        'License :: OSI Approved :: GPL-3.0',
+        'Programming Language :: Python :: 3',
+        'Operating System :: OS Independent',
+    ],
     install_requires=['pandas>=2', 'numpy>=1'], # Might need review
     extras_require={
         # 'dev': ['pytest>=7.0', 'twine>=4.0.2'],
