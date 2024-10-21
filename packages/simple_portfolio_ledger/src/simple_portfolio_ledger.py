@@ -172,7 +172,7 @@ class SimplePortfolioLedger:
     def simplify_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         """Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present.
 
-        Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . It might create a performance impact, untested.
+        Doesn't convert to a dtype that supports pd.NA, like `DataFrame.convert_dtypes()` although it uses it. See https://github.com/pandas-dev/pandas/issues/58543#issuecomment-2101240339 . It might create a performance impact but this hasn't been tested.
 
         Parameters
         ----------
@@ -182,7 +182,7 @@ class SimplePortfolioLedger:
         Returns
         -------
         pd.DataFrame
-           The simplified dtypes DataFrame.
+           The DataFrame, with simplified dtypes.
         """
         with pd.option_context('future.no_silent_downcasting', True):
             return (
@@ -316,6 +316,8 @@ class SimplePortfolioLedger:
                     op_size
                     # Move operation from the index and create one column for each op
                     .unstack('operation')
+                    # Remove name for columns' index
+                    .rename_axis(None, axis=1)
                     # Fill na with 0
                     .fillna(0)
                     # Add columns that weren't created in the previous operation
@@ -383,6 +385,8 @@ class SimplePortfolioLedger:
                     op_size_cumsum
                     # Move operation from the index and create one column for each op
                     .unstack('operation')
+                    # Remove name for columns' index
+                    .rename_axis(None, axis=1)
                     # Add columns that weren't created in the previous operation
                     #  using the operation list from the class' self._ops_names
                     .reindex(sorted(self._ops_names), axis=1, fill_value=0)
@@ -765,6 +769,7 @@ class SimplePortfolioLedger:
                 'commission': commission,
                 'tax': tax,
                 'calculated_total': calculated_total,
+                'calculated_total-stated_total': calculated_total - stated_total,
             }
             raise ValueError(error_msg, error_dict)
 
@@ -956,6 +961,7 @@ class SimplePortfolioLedger:
                 'commission': commission,
                 'tax': tax,
                 'calculated_total': calculated_total,
+                'calculated_total-stated_total': calculated_total - stated_total,
             }
             raise ValueError(error_msg, error_dict)
 
@@ -1171,6 +1177,8 @@ class SimplePortfolioLedger:
         for instr, metadata in instuments_metadata.items():
             if not isinstance(metadata, dict):
                 continue
+            namedict = {}
+            typedict = {}
             if metadata.get('name') is not None:  # Does not override
                 namedict = {'name': metadata['name']}
             if metadata.get('type') is not None:  # Does not override
