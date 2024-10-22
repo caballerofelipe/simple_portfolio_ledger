@@ -405,9 +405,9 @@ class SimplePortfolioLedger:
                         # sum of all cumsum columns
                         held=lambda x: x[ops_cumsum_names].sum(axis=1),
                         # Invested total in positive value
-                        invested=lambda x: x[['cumsum invest', 'cumsum uninvest']]
-                        .sum(axis=1)
-                        .abs(),
+                        invested=(
+                            lambda x: x[['cumsum invest', 'cumsum uninvest']].sum(axis=1).abs()
+                        ),
                     )
                     # Rename newly created columns
                     .rename(columns={'held': 'cumsum held', 'invested': 'cumsum invested'})
