@@ -1282,15 +1282,15 @@ class SimplePortfolioLedger:
             Whether to overwrite the file specified in path if it exists.
         """
 
-        the_Path = pathlib.Path(path)
+        pathlib_path = pathlib.Path(path)
 
-        if the_Path.is_dir():
+        if pathlib_path.is_dir():
             raise ValueError(f'path [{path}] is a directory: aborting.')
 
-        if overwrite is False and the_Path.is_file():
+        if overwrite is False and pathlib_path.is_file():
             raise ValueError(f'path [{path}] exists, overwrite is False: aborting.')
 
-        if the_Path.suffix != '.spl':
+        if pathlib_path.suffix != '.spl':
             warnings.warn(
                 'Not using the .spl suffix. The .spl extension is recommended to keep track of this class\' files.',
                 stacklevel=2,
@@ -1309,7 +1309,7 @@ class SimplePortfolioLedger:
         # From the documentation it appears that compression can be done in `pd.HDFStore()`
         #  but from testing, even if the parameters exist, file size wasn't getting smaller
         #  it even grew. So compression is done in `store.put()`.
-        with pd.HDFStore(the_Path, mode='w') as store:
+        with pd.HDFStore(pathlib_path, mode='w') as store:
             store.put(
                 '_ledger_df',
                 ledger_df,
@@ -1333,3 +1333,93 @@ class SimplePortfolioLedger:
         with pd.HDFStore(path, mode='r') as store:
             self._ledger_df = store.get('_ledger_df')
             self._instruments_metadata = store.get_storer('_ledger_df').attrs._instruments_metadata
+
+    def to_excel(
+        self,
+        path: str,
+        instrument_type: bool = False,
+        instrument_name: bool = False,
+        cols_operation: bool = False,
+        cols_operation_cumsum: bool = False,
+        cols_operation_balance_by_instrument: bool = False,
+        overwrite: bool = False,
+    ):
+        """Saves the ledger to an Excel file.
+
+        Parameters
+        ----------
+        path : str
+            File path.
+        instrument_type : bool, optional
+            Wether to add a column for the instrument type. By default False.
+        instrument_name : bool, optional
+            Wether to add a column for the instrument name. By default False.
+        cols_operation : bool, optional
+            Whether to add cols_operation to The Ledger. By default False.
+        cols_operation_cumsum : bool, optional
+            Whether to add cols_operation_cumsum to The Ledger. By default False.
+        cols_operation_balance_by_instrument : bool, optional
+            Whether to add cols_operation_balance_by_instrument to The Ledger. By default False.
+        overwrite : bool, optional
+            Whether to overwrite the file specified in path if it exists. by default False.
+
+        Raises
+        ------
+        ValueError
+            path [{path}] is a directory: aborting.
+        ValueError
+            path [{path}] exists, overwrite is False: aborting.
+        """
+        pathlib_path = pathlib.Path(path)
+
+        if pathlib_path.is_dir():
+            raise ValueError(f'path [{path}] is a directory: aborting.')
+
+        if overwrite is False and pathlib_path.is_file():
+            raise ValueError(f'path [{path}] exists, overwrite is False: aborting.')
+
+        # From https://xlsxwriter.readthedocs.io/example_pandas_autofilter.html
+
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        writer = pd.ExcelWriter(path, engine="xlsxwriter")
+
+        show_index = True
+        add_if_show_index = 1 if show_index is True else 0
+
+        # Convert the DataFrame to an XlsxWriter Excel object
+        self.ledger(
+            instrument_type=instrument_type,
+            instrument_name=instrument_name,
+            cols_operation=cols_operation,
+            cols_operation_cumsum=cols_operation_cumsum,
+            cols_operation_balance_by_instrument=cols_operation_balance_by_instrument,
+        ).to_excel(
+            writer,
+            sheet_name="ledger",
+            index=show_index,
+        )
+
+        # Get the xlsxwriter workbook and worksheet objects.
+        # workbook = writer.book
+        worksheet = writer.sheets["ledger"]
+
+        # Get the dimensions of the DataFrame.
+        (max_row, max_col) = self.ledger(
+            instrument_type=instrument_type,
+            instrument_name=instrument_name,
+            cols_operation=cols_operation,
+            cols_operation_cumsum=cols_operation_cumsum,
+            cols_operation_balance_by_instrument=cols_operation_balance_by_instrument,
+        ).shape
+
+        # Set the autofilter.
+        worksheet.autofilter(0, 1, max_row, max_col)
+
+        # From https://xlsxwriter.readthedocs.io/example_panes.html
+        worksheet.freeze_panes(1, 3 + add_if_show_index)
+
+        # From https://stackoverflow.com/a/75120836/1071459
+        worksheet.autofit()
+
+        # Close the Pandas Excel writer and output the Excel file.
+        writer.close()
