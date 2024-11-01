@@ -1,0 +1,48 @@
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-1 {
+    color: #0e4;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h1 {
+    color: #0e4;
+}
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-2 {
+    color: yellowgreen;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h2 {
+    color: yellowgreen;
+}
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-3 {
+    color: #88aaaa;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h3 {
+    color: #88aaaa;
+}
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-4 {
+    color: orange;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h4 {
+    color: orange;
+}
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-5 {
+    color: orangered;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h5 {
+    color: orangered;
+}
+/* EDIT MODE */
+.HyperMD-header.HyperMD-header-6 {
+    color: crimson;
+}
+/* PREVIEW MODE */
+.markdown-preview-view h6 {
+    color: crimson;
+}
