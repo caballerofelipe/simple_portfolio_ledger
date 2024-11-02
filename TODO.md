@@ -2,7 +2,6 @@
 2024-10-17
 
 ## Ledger structure
-- Change column name `stated_total` to `total`, this makes more sense as it will be calculated and not stated.
 - Change the name of cols_operations to something more intuitive, like `summary_*()`. Think about it.
 - Maybe the description column is redundant and the name of the operation is enough. Or maybe be more explicit in the description, instead of 'Buy {instrument}' it could be 'Buy X {instrument} in exchange for Y {price_in}' where X and Y are amounts.
 - Maybe add a description to metadata? (I.e. what does a given instrument represent. E.g.: FSTFX is called "Fidelity Limited Term Municipal Income Fund" but from that name I don't necessarily know what that instrument is so a small description could be added to the metadata {a part from name and type} to allow easier instrument tracking).

@@ -28,7 +28,7 @@ class SimplePortfolioLedger:
         'size',
         'commission',
         'tax',
-        'stated_total',
+        'total',
         'date_order',
         'description',
         'notes',
@@ -473,7 +473,7 @@ class SimplePortfolioLedger:
             elif info['operation'] == 'buy':
                 df.loc[idx, 'balance buy'] = df.loc[prev_idx, 'balance buy'] + df.loc[idx, 'size']
                 df.loc[idx, 'balance buy total payed'] = (
-                    df.loc[prev_idx, 'balance buy total payed'] + df.loc[idx, 'stated_total']
+                    df.loc[prev_idx, 'balance buy total payed'] + df.loc[idx, 'total']
                 )
                 # df.loc[idx, 'avg buy total price'] will be computed at the end
                 #  of each iteration of this for
@@ -628,7 +628,7 @@ class SimplePortfolioLedger:
                 'instrument',
                 'price_w_expenses',
                 'size',
-                'stated_total',
+                'total',
                 'account',
             ]
             groups = self._ledger_df[cols_subset].groupby(['instrument', 'account'])
@@ -799,8 +799,8 @@ class SimplePortfolioLedger:
         op_2['commission'] = commission  # buy
         op_1['tax'] = 0  # invest
         op_2['tax'] = tax  # buy
-        op_1['stated_total'] = -1 * calculated_total  # invest
-        op_2['stated_total'] = calculated_total  # buy
+        op_1['total'] = -1 * calculated_total  # invest
+        op_2['total'] = calculated_total  # buy
         op_1['date_order'] = date_order if date_order is not None else date_execution  # invest
         op_2['date_order'] = date_execution  # buy
         op_1['description'] = f'Invest in {instrument}.'  # invest
@@ -858,7 +858,7 @@ class SimplePortfolioLedger:
             'size': amount,
             'commission': 0,
             'tax': 0,
-            'stated_total': amount,
+            'total': amount,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Deposit {instrument}.',
             'notes': notes,
@@ -908,7 +908,7 @@ class SimplePortfolioLedger:
             'size': size,
             'commission': 0,
             'tax': 0,
-            'stated_total': amount,
+            'total': amount,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Dividend from {instrument_from}.',
             'notes': notes,
@@ -991,8 +991,8 @@ class SimplePortfolioLedger:
         op_2['commission'] = 0  # uninvest
         op_1['tax'] = tax  # sell
         op_2['tax'] = 0  # uninvest
-        op_1['stated_total'] = -1 * calculated_total  # sell
-        op_2['stated_total'] = calculated_total  # uninvest
+        op_1['total'] = -1 * calculated_total  # sell
+        op_2['total'] = calculated_total  # uninvest
         op_1['date_order'] = date_order if date_order is not None else date_execution  # sell
         op_2['date_order'] = date_execution  # uninvest
         op_1['description'] = f'Sell {instrument}.'  # sell
@@ -1030,7 +1030,7 @@ class SimplePortfolioLedger:
             'size': size,
             'commission': 0,
             'tax': 0,
-            'stated_total': 0,
+            'total': 0,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Stock dividend from {instrument}.',
             'notes': notes,
@@ -1083,7 +1083,7 @@ class SimplePortfolioLedger:
             'size': -amount,
             'commission': 0,
             'tax': 0,
-            'stated_total': -amount,
+            'total': -amount,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Withdraw {instrument}.',
             'notes': notes,
