@@ -1,48 +1,81 @@
+:root {
+    --h6-color: #2981fe;
+    --h5-color: #29b3f0;
+    --h4-color: #29e6e1;
+    --h3-color: #42dbd8;
+    --h2-color: #7496d7;
+    --h1-color: #a650d6;
+}
+/* :root {
+    --h6-color: #000000;
+    --h5-color: #106557;
+    --h4-color: #21cbae;
+    --h3-color: #42dbd8;
+    --h2-color: #7496d7;
+    --h1-color: #a650d6;
+} */
+/* :root {
+    --h6-color: #000000;
+    --h5-color: #0c5044;
+    --h4-color: #19a089;
+    --h3-color: #3ab0b4;
+    --h2-color: #7080c5;
+    --h1-color: #a650d6;
+} */
+/* :root {
+    --h6-color: #000000;
+    --h5-color: #0c5044;
+    --h4-color: #19a089;
+    --h3-color: #4ca0b9;
+    --h2-color: #a650d6;
+    --h1-color: #ff00f3;
+} */
+
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-1 {
-    color: #0e4;
+    color: var(--h1-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h1 {
-    color: #0e4;
+    color: var(--h1-color);
 }
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-2 {
-    color: yellowgreen;
+    color: var(--h2-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h2 {
-    color: yellowgreen;
+    color: var(--h2-color);
 }
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-3 {
-    color: #88aaaa;
+    color: var(--h3-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h3 {
-    color: #88aaaa;
+    color: var(--h3-color);
 }
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-4 {
-    color: orange;
+    color: var(--h4-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h4 {
-    color: orange;
+    color: var(--h4-color);
 }
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-5 {
-    color: orangered;
+    color: var(--h5-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h5 {
-    color: orangered;
+    color: var(--h5-color);
 }
 /* EDIT MODE */
 .HyperMD-header.HyperMD-header-6 {
-    color: crimson;
+    color: var(--h6-color);
 }
 /* PREVIEW MODE */
 .markdown-preview-view h6 {
-    color: crimson;
+    color: var(--h6-color);
 }
