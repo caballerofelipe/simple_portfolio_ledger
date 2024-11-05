@@ -2,8 +2,8 @@
 
 import functools
 import inspect
-import warnings
 import pathlib
+import warnings
 from typing import List
 
 import numpy as np
@@ -199,9 +199,9 @@ class SimplePortfolioLedger:
         self,
         instrument_type: bool = False,
         instrument_name: bool = False,
-        cols_operation: bool = False,
-        cols_operation_cumsum: bool = False,
-        cols_operation_balance_by_instrument: bool = False,
+        operation_columns: bool = False,
+        operation_columns_cumsum: bool = False,
+        operation_columns_balance: bool = False,
         thousands_fmt_sep=False,
         thousands_fmt_decimals=1,
     ) -> pd.DataFrame:
@@ -213,12 +213,12 @@ class SimplePortfolioLedger:
             Wether to add a column for the instrument type. By default False.
         instrument_name : bool, optional
             Wether to add a column for the instrument name. By default False.
-        cols_operation : bool, optional
-            Whether to add cols_operation to The Ledger. By default False.
-        cols_operation_cumsum : bool, optional
-            Whether to add cols_operation_cumsum to The Ledger. By default False.
-        cols_operation_balance_by_instrument : bool, optional
-            Whether to add cols_operation_balance_by_instrument to The Ledger. By default False.
+        operation_columns : bool, optional
+            Whether to add operation_columns to The Ledger. By default False.
+        operation_columns_cumsum : bool, optional
+            Whether to add operation_columns_cumsum to The Ledger. By default False.
+        operation_columns_balance : bool, optional
+            Whether to add operation_columns_balance to The Ledger. By default False.
         thousands_fmt_sep : bool, optional
             Add a thousands separator. By default False.
         thousands_fmt_decimals : int, optional
@@ -249,14 +249,14 @@ class SimplePortfolioLedger:
 
         dfs_toconcat = [the_ledger]
 
-        if cols_operation is True:
-            tmp = self.cols_operation(show_instr_accnt=False)
+        if operation_columns is True:
+            tmp = self.operation_columns(show_instr_accnt=False)
             dfs_toconcat.append(tmp)
-        if cols_operation_cumsum is True:
-            tmp = self.cols_operation_cumsum(show_instr_accnt=False)
+        if operation_columns_cumsum is True:
+            tmp = self.operation_columns_cumsum(show_instr_accnt=False)
             dfs_toconcat.append(tmp)
-        if cols_operation_balance_by_instrument is True:
-            tmp = self.cols_operation_balance_by_instrument(show_instr_accnt=False)
+        if operation_columns_balance is True:
+            tmp = self.operation_columns_balance(show_instr_accnt=False)
             dfs_toconcat.append(tmp)
 
         to_return = (
@@ -286,7 +286,7 @@ class SimplePortfolioLedger:
             return to_return
 
     @_deco_check_ledger_for_cols
-    def cols_operation(self, show_instr_accnt=False) -> pd.DataFrame:
+    def operation_columns(self, show_instr_accnt=False) -> pd.DataFrame:
         """Returns a dataframe with 1 column per operation.
 
         Parameters
@@ -339,7 +339,7 @@ class SimplePortfolioLedger:
             return to_return[[*sorted(self._ops_names)]]
 
     @_deco_check_ledger_for_cols
-    def cols_operation_cumsum(self, show_instr_accnt=False) -> pd.DataFrame:
+    def operation_columns_cumsum(self, show_instr_accnt=False) -> pd.DataFrame:
         """Returns a DataFrame with one column per operation but do a cumsum per instrument/account.
 
         Parameters
@@ -427,7 +427,7 @@ class SimplePortfolioLedger:
             return to_return[[*ops_cumsum_names, 'cumsum held', 'cumsum invested']]
 
     @staticmethod
-    def _cols_operation_balance_by_instrument_for_group(group_df, new_columns) -> pd.DataFrame:
+    def _operation_columns_balance_for_group(group_df, new_columns) -> pd.DataFrame:
         """
         WARNING: not to be called by itself. It needs a grouping per instrument.
         """
@@ -446,11 +446,9 @@ class SimplePortfolioLedger:
 
         # Cols to pass from previous row to current
         cols_to_copy = [col for col in new_columns if 'balance' in col]
-        # print(cols_to_copy)
 
         # Initially prev index is the same as current index
         prev_idx = df.index[0]
-        # print(df.loc[prev_idx, cols_to_copy])
 
         for row in df.iterrows():
             idx, info = row
@@ -462,7 +460,7 @@ class SimplePortfolioLedger:
             df.loc[idx, cols_to_copy] = df.loc[prev_idx, cols_to_copy]
 
             # invest and uninvest should not be part of the balance
-            #  the invested balance is computed in `cols_operation_cumsum`, this applies to:
+            #  the invested balance is computed in `operation_columns_cumsum`, this applies to:
             # `info['operation'] == 'invest'` and `info['operation'] == 'uninvest'`
 
             if info['operation'] == 'deposit':
@@ -589,7 +587,7 @@ class SimplePortfolioLedger:
         return df
 
     @_deco_check_ledger_for_cols
-    def cols_operation_balance_by_instrument(self, show_instr_accnt=False) -> pd.DataFrame:
+    def operation_columns_balance(self, show_instr_accnt=False) -> pd.DataFrame:
         """Returns a DataFrame with a balance per operation per instrument/account.
 
         Parameters
@@ -610,8 +608,8 @@ class SimplePortfolioLedger:
             'balance buy',
             'balance buy total payed',  # Amount used to buy an instrument
             'avg buy total price',
-            # Balance for invest in cols_operation_cumsum, called 'invest cumsum'
-            # Balance for uninvest in cols_operation_cumsum, called 'uninvest cumsum'
+            # Balance for invest in operation_columns_cumsum, called 'invest cumsum'
+            # Balance for uninvest in operation_columns_cumsum, called 'uninvest cumsum'
             # Withdraw balance doesn't make sense because it means removing something
             # Sell balance doesn't make sense because it means removing something
             'sell profit loss',
@@ -636,7 +634,7 @@ class SimplePortfolioLedger:
             # IMPORTANT:
             # - Columns should not be added manually in this step if the ledger
             #    doesn't include all possible operations, this will be done in
-            #    `self._cols_operation_balance_by_instrument_for_group` so
+            #    `self._operation_columns_balance_for_group` so
             #    --> DON'T do `.reindex(new_columns, axis=1, fill_value=pd.NA)`
             # - Do not fill na with 0, as this will overwrite the expected
             #    behavior for column 'avg buy total price', which is sometimes nan
@@ -644,7 +642,7 @@ class SimplePortfolioLedger:
             #    --> DON'T do `.fillna(0)`
             to_return = (
                 groups.apply(
-                    self._cols_operation_balance_by_instrument_for_group,
+                    self._operation_columns_balance_for_group,
                     include_groups=False,
                     new_columns=new_columns,
                 )
@@ -1299,9 +1297,9 @@ class SimplePortfolioLedger:
         ledger_df = self.ledger(
             instrument_type=False,
             instrument_name=False,
-            cols_operation=False,
-            cols_operation_cumsum=False,
-            cols_operation_balance_by_instrument=False,
+            operation_columns=False,
+            operation_columns_cumsum=False,
+            operation_columns_balance=False,
             thousands_fmt_sep=False,
             thousands_fmt_decimals=1,
         )
@@ -1339,9 +1337,9 @@ class SimplePortfolioLedger:
         path: str,
         instrument_type: bool = False,
         instrument_name: bool = False,
-        cols_operation: bool = False,
-        cols_operation_cumsum: bool = False,
-        cols_operation_balance_by_instrument: bool = False,
+        operation_columns: bool = False,
+        operation_columns_cumsum: bool = False,
+        operation_columns_balance: bool = False,
         overwrite: bool = False,
     ):
         """Saves the ledger to an Excel file.
@@ -1354,12 +1352,12 @@ class SimplePortfolioLedger:
             Wether to add a column for the instrument type. By default False.
         instrument_name : bool, optional
             Wether to add a column for the instrument name. By default False.
-        cols_operation : bool, optional
-            Whether to add cols_operation to The Ledger. By default False.
-        cols_operation_cumsum : bool, optional
-            Whether to add cols_operation_cumsum to The Ledger. By default False.
-        cols_operation_balance_by_instrument : bool, optional
-            Whether to add cols_operation_balance_by_instrument to The Ledger. By default False.
+        operation_columns : bool, optional
+            Whether to add operation_columns to The Ledger. By default False.
+        operation_columns_cumsum : bool, optional
+            Whether to add operation_columns_cumsum to The Ledger. By default False.
+        operation_columns_balance : bool, optional
+            Whether to add operation_columns_balance to The Ledger. By default False.
         overwrite : bool, optional
             Whether to overwrite the file specified in path if it exists. by default False.
 
@@ -1390,9 +1388,9 @@ class SimplePortfolioLedger:
         self.ledger(
             instrument_type=instrument_type,
             instrument_name=instrument_name,
-            cols_operation=cols_operation,
-            cols_operation_cumsum=cols_operation_cumsum,
-            cols_operation_balance_by_instrument=cols_operation_balance_by_instrument,
+            operation_columns=operation_columns,
+            operation_columns_cumsum=operation_columns_cumsum,
+            operation_columns_balance=operation_columns_balance,
         ).to_excel(
             writer,
             sheet_name="ledger",
@@ -1407,9 +1405,9 @@ class SimplePortfolioLedger:
         (max_row, max_col) = self.ledger(
             instrument_type=instrument_type,
             instrument_name=instrument_name,
-            cols_operation=cols_operation,
-            cols_operation_cumsum=cols_operation_cumsum,
-            cols_operation_balance_by_instrument=cols_operation_balance_by_instrument,
+            operation_columns=operation_columns,
+            operation_columns_cumsum=operation_columns_cumsum,
+            operation_columns_balance=operation_columns_balance,
         ).shape
 
         # Set the autofilter.
