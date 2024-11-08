@@ -4,7 +4,7 @@ import functools
 import inspect
 import pathlib
 import warnings
-from typing import List
+from typing import List, Tuple, Callable
 
 import numpy as np
 import pandas as pd
@@ -92,7 +92,29 @@ class SimplePortfolioLedger:
     # *****************
 
     @staticmethod
-    def _deco_check_ledger_for_cols(func):
+    def _deco_ledger_check(func: Callable) -> Callable:
+        """This decorator checks the ledger before invoking it or some computation function.
+
+        It does the following:
+        - If the ledger is empty, it issues a warning stating that the function will only return the basic structure.
+        - Checks if a foreign operation was added to the ledger, in which case an exception is raised.
+
+        Parameters
+        ----------
+        func : Callable
+            The function that will show the ledger or a computation of the ledger.
+
+        Returns
+        -------
+        Callable
+            The wrapper function.
+
+        Raises
+        ------
+        ValueError
+            'One or more forbidden operations were inserted in the ledger.'
+        """
+
         # https://stackoverflow.com/a/72563047/1071459
         deco_name = inspect.stack()[0].function
 
@@ -195,6 +217,7 @@ class SimplePortfolioLedger:
                 .infer_objects()
             )
 
+    @_deco_ledger_check
     def ledger(
         self,
         instrument_type: bool = False,
@@ -229,8 +252,6 @@ class SimplePortfolioLedger:
         pd.DataFrame
             The Ledger, with optional additional information.
         """
-        if len(self._ledger_df) == 0:
-            warnings.warn('WARNING: Ledger is empty, showing only basic structure.', stacklevel=2)
 
         # Simplify dtypes
         the_ledger = self.simplify_dtypes(
@@ -250,13 +271,13 @@ class SimplePortfolioLedger:
         dfs_toconcat = [the_ledger]
 
         if operation_columns is True:
-            tmp = self.operation_columns(show_instr_accnt=False)
+            tmp = self.operation_columns()
             dfs_toconcat.append(tmp)
         if operation_columns_cumsum is True:
-            tmp = self.operation_columns_cumsum(show_instr_accnt=False)
+            tmp = self.operation_columns_cumsum(all_columns=False)
             dfs_toconcat.append(tmp)
         if operation_columns_balance is True:
-            tmp = self.operation_columns_balance(show_instr_accnt=False)
+            tmp = self.operation_columns_balance(all_columns=False)
             dfs_toconcat.append(tmp)
 
         to_return = (
@@ -285,27 +306,24 @@ class SimplePortfolioLedger:
         else:
             return to_return
 
-    @_deco_check_ledger_for_cols
-    def operation_columns(self, show_instr_accnt=False) -> pd.DataFrame:
-        """Returns a dataframe with 1 column per operation.
-
-        Parameters
-        ----------
-        show_instr_accnt : bool, optional
-            Whether or not to show the instrument and the account. By default False.
+    @_deco_ledger_check
+    def operation_columns(
+        self,
+    ) -> pd.DataFrame:
+        """Returns a DataFrame with each operation as a column.
 
         Returns
         -------
         pd.DataFrame
-            A dataframe with 1 column per operation.
+            DataFrame with each operation as a column.
         """
 
         if len(self._ledger_df) == 0:
             # Return an empty DataFrame with whe structure needed
-            to_return = pd.DataFrame(columns=['instrument', 'account', *sorted(self._ops_names)])
+            to_return = pd.DataFrame(columns=[*sorted(self._ops_names)])
         else:
             # Create groups by instrument/operation
-            groups = self._ledger_df.groupby(['instrument', 'account', 'operation'])
+            groups = self._ledger_df.groupby(['operation'])
 
             # For each group, return the size
             #  (for example if an op is buy, the column buy would be filled, not all others)
@@ -323,8 +341,6 @@ class SimplePortfolioLedger:
                     # Add columns that weren't created in the previous operation
                     #   using the operation list from the class self._ops_names
                     .reindex(sorted(self._ops_names), axis=1, fill_value=0)
-                    # Move index instrument created by the last groupby to a column
-                    .reset_index(['instrument', 'account'])
                     # Sort by the original index
                     .sort_index()
                     # Try to pass colums where dtype is object to a type like int64 or float64
@@ -333,24 +349,39 @@ class SimplePortfolioLedger:
 
                 to_return = self.simplify_dtypes(to_return)
 
-        if show_instr_accnt is True:
-            return to_return[['instrument', 'account', *sorted(self._ops_names)]]
-        else:
-            return to_return[[*sorted(self._ops_names)]]
+        return to_return[[*sorted(self._ops_names)]]
 
-    @_deco_check_ledger_for_cols
-    def operation_columns_cumsum(self, show_instr_accnt=False) -> pd.DataFrame:
-        """Returns a DataFrame with one column per operation but do a cumsum per instrument/account.
+    @_deco_ledger_check
+    def operation_columns_cumsum(self, all_columns=True) -> pd.DataFrame:
+        """Returns a DataFrame with a cumsum for each operation for each account-instrument-price_in.
+
+        Useful to see the total "so far" for each account-instrument-price_in combination.
+
+        The index of the returned DataFrame is the same as the ledger but might be sorted diffeerently.
+
+        The operation is done by grouping operations by account-instrument-price_in, doing a cumsum for every group and returns a DataFrame with the following columns:
+            - 'account' (when all_columns=True)
+            - 'instrument' (when all_columns=True)
+            - 'price_in' (when all_columns=True)
+            - The cumsum of all operation, every operation turned into a column.
+            - 'cumsum held'
+            - 'cumsum invested'
 
         Parameters
         ----------
-        show_instr_accnt : bool, optional
-            Whether or not to show the instrument and the account. By default False.
+        all_columns : bool, optional
+            Whether or not to show columns 'account', 'instrument', 'price_in'. By default True.
 
         Returns
         -------
         pd.DataFrame
-            A DataFrame with one column per operation but do a cumsum per instrument/operation/account.
+            DataFrame with the following columns:
+                - 'account' (when all_columns=True)
+                - 'instrument' (when all_columns=True)
+                - 'price_in' (when all_columns=True)
+                - The cumsum of all operation, every operation turned into a column.
+                - 'cumsum held'
+                - 'cumsum invested'
         """
 
         # List of columns to return, SORTED by self._ops_names
@@ -362,6 +393,7 @@ class SimplePortfolioLedger:
                 columns=[
                     'instrument',
                     'account',
+                    'price_in',
                     *ops_cumsum_names,
                     'cumsum held',
                     'cumsum invested',
@@ -369,7 +401,7 @@ class SimplePortfolioLedger:
             )
         else:
             # Create groups by instrument/operation
-            groups = self._ledger_df.groupby(['operation', 'instrument', 'account'])
+            groups = self._ledger_df.groupby(['account', 'instrument', 'price_in', 'operation'])
 
             # For each group do a cumsum for size
             op_size_cumsum = groups.apply(lambda x: x['size'].cumsum(), include_groups=False)
@@ -392,14 +424,14 @@ class SimplePortfolioLedger:
                     .reindex(sorted(self._ops_names), axis=1, fill_value=0)
                     # Rename created columns
                     .rename(columns=rename_dict)
-                    # Move indexes 'instrument' and 'account'created by the last groupby to a column
-                    .reset_index(['instrument', 'account'])
+                    # Move indexes 'account', 'instrument' and 'price_in' created by the last groupby to a column
+                    .reset_index(['account', 'instrument', 'price_in'])
                     # Regroup by instrument to do the ffill
-                    .groupby(['instrument', 'account'])
+                    .groupby(['account', 'instrument', 'price_in'])
                     # For each instrument, ffill with the cumsum, fill with 0 the beginning
                     .apply(lambda x: x.ffill().fillna(0), include_groups=False)
                     # Move indexes 'instrument' and 'account'created by the last groupby to a column
-                    .reset_index(['instrument', 'account'])
+                    .reset_index(['account', 'instrument', 'price_in'])
                     # Create new colums
                     .assign(
                         # sum of all cumsum columns
@@ -419,9 +451,16 @@ class SimplePortfolioLedger:
 
                 to_return = self.simplify_dtypes(to_return)
 
-        if show_instr_accnt is True:
+        if all_columns is True:
             return to_return[
-                ['instrument', 'account', *ops_cumsum_names, 'cumsum held', 'cumsum invested']
+                [
+                    'account',
+                    'instrument',
+                    'price_in',
+                    *ops_cumsum_names,
+                    'cumsum held',
+                    'cumsum invested',
+                ]
             ]
         else:
             return to_return[[*ops_cumsum_names, 'cumsum held', 'cumsum invested']]
@@ -586,14 +625,37 @@ class SimplePortfolioLedger:
 
         return df
 
-    @_deco_check_ledger_for_cols
-    def operation_columns_balance(self, show_instr_accnt=False) -> pd.DataFrame:
-        """Returns a DataFrame with a balance per operation per instrument/account.
+    @_deco_ledger_check
+    def operation_columns_balance(self, all_columns=True) -> pd.DataFrame:
+        """Returns a DataFrame with a balance per operation per account-instrument-price_in.
+
+        Useful to see the balance on every row for each account-instrument-price_in combination.
+
+        The index of the returned DataFrame is the same as the ledger but might be sorted diffeerently.
+
+        The operation is done by grouping operations by account-instrument-price_in, doing a balance for every group and returns a DataFrame with the following columns:
+            - 'account' (when all_columns=True)
+            - 'instrument' (when all_columns=True)
+            - 'price_in' (when all_columns=True)
+            - 'balance deposit',
+            - 'balance dividend',
+            - 'balance stock dividend',
+            - 'balance buy',
+            - 'balance buy total payed',  # Amount used to buy an instrument
+            - 'avg buy total price',
+            - 'sell profit loss',
+            - 'accumulated sell profit loss'
+
+        From all the operations, the following aren't computed, and an explanation is given:
+            - 'invest', balance for invest is in operation_columns_cumsum, called 'invest cumsum'.
+            - 'uninvest', balance for uninvest is in operation_columns_cumsum, called 'uninvest cumsum'.
+            - 'withdraw' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
+            - 'sell' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
 
         Parameters
         ----------
-        show_instr_accnt : bool, optional
-            Whether or not to show the instrument and the account. By default False.
+        all_columns : bool, optional
+            Whether or not to show columns 'account', 'instrument', 'price_in'. By default True.
 
         Returns
         -------
@@ -608,28 +670,29 @@ class SimplePortfolioLedger:
             'balance buy',
             'balance buy total payed',  # Amount used to buy an instrument
             'avg buy total price',
-            # Balance for invest in operation_columns_cumsum, called 'invest cumsum'
-            # Balance for uninvest in operation_columns_cumsum, called 'uninvest cumsum'
-            # Withdraw balance doesn't make sense because it means removing something
-            # Sell balance doesn't make sense because it means removing something
             'sell profit loss',
             'accumulated sell profit loss',
+            # 'invest', balance for invest is in operation_columns_cumsum, called 'invest cumsum'
+            # 'uninvest', balance for uninvest is in operation_columns_cumsum, called 'uninvest cumsum'
+            # 'withdraw' balance doesn't make sense because it means removing something
+            # 'sell' balance doesn't make sense because it means removing something
         ]
 
         if len(self._ledger_df) == 0:
             # Return an empty DataFrame with whe structure needed
-            to_return = pd.DataFrame(columns=['instrument', 'account', *new_columns])
+            to_return = pd.DataFrame(columns=['account', 'instrument', 'price_in', *new_columns])
         else:
             # We only use the columns necessary for the grouping
             cols_subset = [
-                'operation',
+                'account',
                 'instrument',
+                'price_in',
+                'operation',
                 'price_w_expenses',
                 'size',
                 'total',
-                'account',
             ]
-            groups = self._ledger_df[cols_subset].groupby(['instrument', 'account'])
+            groups = self._ledger_df[cols_subset].groupby(['account', 'instrument', 'price_in'])
 
             # IMPORTANT:
             # - Columns should not be added manually in this step if the ledger
@@ -647,7 +710,7 @@ class SimplePortfolioLedger:
                     new_columns=new_columns,
                 )
                 # Move indexes 'instrument' and 'account'created by the last groupby to a column
-                .reset_index(['instrument', 'account'])
+                .reset_index(['account', 'instrument', 'price_in'])
                 # Sort by the original index
                 .sort_index()
                 # Try to pass colums where dtype is object to a type like int64 or float64
@@ -656,8 +719,8 @@ class SimplePortfolioLedger:
 
             to_return = self.simplify_dtypes(to_return)
 
-        if show_instr_accnt is True:
-            return to_return[['instrument', 'account', *new_columns]]
+        if all_columns is True:
+            return to_return[['account', 'instrument', 'price_in', *new_columns]]
         else:
             return to_return[[*new_columns]]
 
@@ -1095,6 +1158,38 @@ class SimplePortfolioLedger:
     # *****************
     # MARK: METADATA
     # *****************
+
+    @classmethod
+    def get_ledger_columns(cls) -> Tuple[str]:
+        """Returns the columns in a ledger.
+        
+        Returns
+        -------
+        List[str]
+            Ledger columns.
+        """
+        return cls._ledger_columns
+
+    @classmethod
+    def get_operation_names(cls) -> List[str]:
+        """Returns all the possible operation names in a ledger.
+
+        Returns
+        -------
+        List[str]
+            Sorted operation names in the ledger.
+        """
+        return sorted(cls._ops_names)
+
+    def get_present_accounts(self) -> np.ndarray:
+        """Returns present accounts in the ledger.
+
+        Returns
+        -------
+        np.ndarray
+            Present accounts in the ledger.
+        """
+        return self._ledger_df['account'].unique()
 
     def get_present_instruments(self) -> np.ndarray:
         """Returns present instruments in the ledger.

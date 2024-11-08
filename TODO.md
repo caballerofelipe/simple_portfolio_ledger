@@ -1,7 +1,30 @@
 # TODO LIST
 2024-10-17
 
+## Critical
+- (Not critical per se but is very similar to previous task, will do it right after) Create operation_list, operation_cumsum, operation_balance.
+	- Or maybe where ini and end are dates
+		- asset_operations(ini, end, account, instrument, price_in)
+		- asset_operations_cumsum(ini, end, account, instrument, price_in)
+		- asset_balance(ini, end, account, instrument, price_in)
+		- Maybe having a function that returns the same as operation_columns but in a different format would be useful to understand the state of the portfolio. This function would show the groups in a more legible way.
+		```
+		# Create groups by instrument/operation
+
+		groups = self._ledger_df.groupby(['account', 'instrument', 'price_in', 'operation'])
+
+		# For each group, return the size
+
+		# return directly this
+
+		op_size = groups.apply(lambda x: x['size'], include_groups=False)
+		# also the apply could return x['size'].sum()
+		```
+- When retrieving the ledger, a sorting should be in place: first by date and then by index.
+	- This is needed especially for `operation_columns*()` functions.
+
 ## Ledger structure
+- Should all columns in the ledger have no spaces or are these allowed, used to keep consistency.
 - Maybe the description column is redundant and the name of the operation is enough. Or maybe be more explicit in the description, instead of 'Buy {instrument}' it could be 'Buy X {instrument} in exchange for Y {price_in}' where X and Y are amounts.
 - Maybe add a description to metadata? (I.e. what does a given instrument represent. E.g.: FSTFX is called "Fidelity Limited Term Municipal Income Fund" but from that name I don't necessarily know what that instrument is so a small description could be added to the metadata {a part from name and type} to allow easier instrument tracking).
 - Maybe the operation column in the ledger should be called differently, perhaps action. The reason being that operations might be the things that are done via the API and they might have two events happening such as sell (selling and univesting).
@@ -36,8 +59,7 @@
 - Verify before operations if it's possible to do it. For instance
     - Sell only what I have and nothing more.
     - Invest only what I have and nothing more.
-- In _cols_operation_balance_by_instrument_for_group(), for withdraw and sell there should be a final review. If withdraw/sell is more than what I have deposit should have a negative number to show an over withdraw or sell
-- In _cols_operation* the grouping should include price_in as the computation of the same instrument with different reference instrument (price_in) wouldn't make sense (i.e. a stock bought in USD and also in CHF wouldn't allow for the computation to be consistent between the two). In the case that would be needed to be done somehow, a conversion would have to happen.
+- In _cols_operation_balance_by_instrument_for_group(), for withdraw and sell there should be a final review. If withdraw/sell is more than what I have deposit should have a negative number to show an over withdraw or sell.
 - Create a function that returns the last price in the ledger. This is meant to do calculation in case a current price cannot be found online or manually.
 - When computing a balance, if a given instrument was bought using different instruments (e.g. I bought USD using EUR and also CHF), that means that I invested EUR and CHF into USD.
 	- **Problem**:
@@ -68,3 +90,4 @@
 
 ## To think about
 - Maybe `simply_dtypes()` should happen only on setting the ledger and on operation (buy,sell,...) and on `_cols_operation_*` as those are computed on the fly. This would mean that setting `self._ledger_df` would need a setter, although this means that modifying the ledger probably would pass above this setter and it could be changed, if this is true, it's best to compute on reading the `simplify_dtypes()`. Or maybe this operation should happen both on setting and on reading, to allow better performance based on well selected dtypes and on reading to sanitize.
+
