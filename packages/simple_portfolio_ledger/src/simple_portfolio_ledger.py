@@ -18,14 +18,15 @@ class SimplePortfolioLedger:
         'opid',
         'subopid',
         'date_execution',
-        'operation',
+        'account',
         'instrument',
+        'price_in',
+        'operation',
+        'size',
         'origin',
         'destination',
-        'price_in',
         'price',
         'price_w_expenses',
-        'size',
         'commission',
         'tax',
         'total',
@@ -34,7 +35,6 @@ class SimplePortfolioLedger:
         'notes',
         'commission_notes',
         'tax_notes',
-        'account',
     )
 
     # Column description in a dict
@@ -1509,7 +1509,7 @@ class SimplePortfolioLedger:
         worksheet.autofilter(0, 1, max_row, max_col)
 
         # From https://xlsxwriter.readthedocs.io/example_panes.html
-        worksheet.freeze_panes(1, 3 + add_if_show_index)
+        worksheet.freeze_panes(1, 8 + add_if_show_index)
 
         # From https://stackoverflow.com/a/75120836/1071459
         worksheet.autofit()
