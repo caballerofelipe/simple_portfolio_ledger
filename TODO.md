@@ -2,6 +2,10 @@
 2024-10-17
 
 ## Critical
+- For groups *account-instrument-price_in* and operations *withdraw* and *sell* we don't know where to take the instrument from, so options to fix this:
+	1. a rule should be implemented to take an instrument out depending on rules: for instance LIFO, FIFO or a specific sequence. For instance FIFO would take from the first group that has the same instrument and that has a positive amount. This would only happen if no *price_in* is specified, if price_in is specified the taken instrument should be the whole specified group *account-instrument-price_in*. The rule would be stated when creating the SPL. In case a history is implemented (see Ideas for the Future), maybe this could be changed when doing a replay. When doing FIFO/LIFO, if there is more taken out than from one group, pass to the next one.
+	2. *sell* and *withdraw* needs to specify the complete group *account-instrument-price_in*.
+	3. When doing *sell* and *withdraw* you specify which group to take from. Similar to doing a FIFO and LIFO, but specified for each operation.
 - (Not critical per se but is very similar to previous task, will do it right after) Create operation_list, operation_cumsum, operation_balance.
 	- Or maybe where ini and end are dates
 		- asset_operations(ini, end, account, instrument, price_in)
@@ -22,6 +26,7 @@
 		```
 - When retrieving the ledger, a sorting should be in place: first by date and then by index.
 	- This is needed especially for `operation_columns*()` functions.
+- Review README.md to merge what is needed to TODO.md.
 
 ## Ledger structure
 - Should all columns in the ledger have no spaces or are these allowed, used to keep consistency.
@@ -91,3 +96,6 @@
 ## To think about
 - Maybe `simply_dtypes()` should happen only on setting the ledger and on operation (buy,sell,...) and on `_cols_operation_*` as those are computed on the fly. This would mean that setting `self._ledger_df` would need a setter, although this means that modifying the ledger probably would pass above this setter and it could be changed, if this is true, it's best to compute on reading the `simplify_dtypes()`. Or maybe this operation should happen both on setting and on reading, to allow better performance based on well selected dtypes and on reading to sanitize.
 
+## Ideas for the future
+
+- Add a story backup (saveable to file) in a DataFrame, this will store all operations to allow to rewrite history, for instance when you made a mistake you could change history to rewrite it the way you want. This would potentially create errors so this DataFrame would have a column specifying if the operation is successful. In case of errors, a manual review would have to be made to fix it.

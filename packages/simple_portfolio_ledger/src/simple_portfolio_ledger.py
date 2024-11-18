@@ -223,7 +223,7 @@ class SimplePortfolioLedger:
         instrument_type: bool = False,
         instrument_name: bool = False,
         operation_columns: bool = False,
-        operation_columns_cumsum: bool = False,
+        instrument_cumsum_by_operation: bool = False,
         operation_columns_balance: bool = False,
         thousands_fmt_sep=False,
         thousands_fmt_decimals=1,
@@ -238,8 +238,8 @@ class SimplePortfolioLedger:
             Wether to add a column for the instrument name. By default False.
         operation_columns : bool, optional
             Whether to add operation_columns to The Ledger. By default False.
-        operation_columns_cumsum : bool, optional
-            Whether to add operation_columns_cumsum to The Ledger. By default False.
+        instrument_cumsum_by_operation : bool, optional
+            Whether to add instrument_cumsum_by_operation to The Ledger. By default False.
         operation_columns_balance : bool, optional
             Whether to add operation_columns_balance to The Ledger. By default False.
         thousands_fmt_sep : bool, optional
@@ -273,8 +273,8 @@ class SimplePortfolioLedger:
         if operation_columns is True:
             tmp = self.operation_columns()
             dfs_toconcat.append(tmp)
-        if operation_columns_cumsum is True:
-            tmp = self.operation_columns_cumsum(all_columns=False)
+        if instrument_cumsum_by_operation is True:
+            tmp = self.instrument_cumsum_by_operation(all_columns=False)
             dfs_toconcat.append(tmp)
         if operation_columns_balance is True:
             tmp = self.operation_columns_balance(all_columns=False)
@@ -352,7 +352,12 @@ class SimplePortfolioLedger:
         return to_return[[*sorted(self._ops_names)]]
 
     @_deco_ledger_check
-    def operation_columns_cumsum(self, all_columns=True) -> pd.DataFrame:
+    def instrument_cumsum_by_operation(
+        self,
+        all_columns=True,
+        group_by_account=False,
+        group_by_price_in=False,
+    ) -> pd.DataFrame:
         """Returns a DataFrame with a cumsum for each operation for each account-instrument-price_in.
 
         Useful to see the total "so far" for each account-instrument-price_in combination.
@@ -364,8 +369,8 @@ class SimplePortfolioLedger:
             - 'instrument' (when all_columns=True)
             - 'price_in' (when all_columns=True)
             - The cumsum of all operation, every operation turned into a column.
-            - 'cumsum held'
-            - 'cumsum invested'
+            - 'cumsum_held'
+            - 'cumsum_invested'
 
         Parameters
         ----------
@@ -380,28 +385,39 @@ class SimplePortfolioLedger:
                 - 'instrument' (when all_columns=True)
                 - 'price_in' (when all_columns=True)
                 - The cumsum of all operation, every operation turned into a column.
-                - 'cumsum held'
-                - 'cumsum invested'
+                - 'cumsum_held'
+                - 'cumsum_invested'
         """
 
         # List of columns to return, SORTED by self._ops_names
-        ops_cumsum_names = [f'cumsum {c}' for c in sorted(self._ops_names)]
+        ops_cumsum_names = [f'cumsum_{c}' for c in sorted(self._ops_names)]
+
+        returned_columns = [
+            'account',  # Could be removed next
+            'instrument',  # MUST NOT be removed
+            'price_in',  # Could be removed next
+        ]
+
+        # Note: instead of adding, this code removes items
+        # as we want to have a pre specified order stated above
+        if group_by_account is False:
+            returned_columns.pop(returned_columns.index('account'))
+        if group_by_price_in is False:
+            returned_columns.pop(returned_columns.index('price_in'))
 
         if len(self._ledger_df) == 0:
             # Return an empty DataFrame with whe structure needed
             to_return = pd.DataFrame(
                 columns=[
-                    'instrument',
-                    'account',
-                    'price_in',
+                    *returned_columns,
                     *ops_cumsum_names,
-                    'cumsum held',
-                    'cumsum invested',
+                    'cumsum_held',
+                    'cumsum_invested',
                 ]
             )
         else:
             # Create groups by instrument/operation
-            groups = self._ledger_df.groupby(['account', 'instrument', 'price_in', 'operation'])
+            groups = self._ledger_df.groupby([*returned_columns, 'operation'])
 
             # For each group do a cumsum for size
             op_size_cumsum = groups.apply(lambda x: x['size'].cumsum(), include_groups=False)
@@ -424,25 +440,23 @@ class SimplePortfolioLedger:
                     .reindex(sorted(self._ops_names), axis=1, fill_value=0)
                     # Rename created columns
                     .rename(columns=rename_dict)
-                    # Move indexes 'account', 'instrument' and 'price_in' created by the last groupby to a column
-                    .reset_index(['account', 'instrument', 'price_in'])
-                    # Regroup by instrument to do the ffill
-                    .groupby(['account', 'instrument', 'price_in'])
-                    # For each instrument, ffill with the cumsum, fill with 0 the beginning
+                    # Move indexes `returned_columns` (created by the last groupby) to a column
+                    .reset_index(returned_columns)
+                    # Regroup to do the ffill
+                    .groupby(returned_columns)
+                    # ffill with the cumsum, fill with 0 the beginning
                     .apply(lambda x: x.ffill().fillna(0), include_groups=False)
-                    # Move indexes 'instrument' and 'account'created by the last groupby to a column
-                    .reset_index(['account', 'instrument', 'price_in'])
+                    # Move indexes `returned_columns` (created by the last groupby) to a column
+                    .reset_index(returned_columns)
                     # Create new colums
                     .assign(
                         # sum of all cumsum columns
-                        held=lambda x: x[ops_cumsum_names].sum(axis=1),
+                        cumsum_held=lambda x: x[ops_cumsum_names].sum(axis=1),
                         # Invested total in positive value
-                        invested=(
-                            lambda x: x[['cumsum invest', 'cumsum uninvest']].sum(axis=1).abs()
+                        cumsum_invested=(
+                            lambda x: x[['cumsum_invest', 'cumsum_uninvest']].sum(axis=1).abs()
                         ),
                     )
-                    # Rename newly created columns
-                    .rename(columns={'held': 'cumsum held', 'invested': 'cumsum invested'})
                     # Sort by the original index
                     .sort_index()
                     # Try to pass colums where dtype is object to a type like int64 or float64
@@ -454,16 +468,14 @@ class SimplePortfolioLedger:
         if all_columns is True:
             return to_return[
                 [
-                    'account',
-                    'instrument',
-                    'price_in',
+                    *returned_columns,
                     *ops_cumsum_names,
-                    'cumsum held',
-                    'cumsum invested',
+                    'cumsum_held',
+                    'cumsum_invested',
                 ]
             ]
         else:
-            return to_return[[*ops_cumsum_names, 'cumsum held', 'cumsum invested']]
+            return to_return[[*ops_cumsum_names, 'cumsum_held', 'cumsum_invested']]
 
     @staticmethod
     def _operation_columns_balance_for_group(group_df, new_columns) -> pd.DataFrame:
@@ -499,7 +511,7 @@ class SimplePortfolioLedger:
             df.loc[idx, cols_to_copy] = df.loc[prev_idx, cols_to_copy]
 
             # invest and uninvest should not be part of the balance
-            #  the invested balance is computed in `operation_columns_cumsum`, this applies to:
+            #  the invested balance is computed in `instrument_cumsum_by_operation`, this applies to:
             # `info['operation'] == 'invest'` and `info['operation'] == 'uninvest'`
 
             if info['operation'] == 'deposit':
@@ -647,8 +659,8 @@ class SimplePortfolioLedger:
             - 'accumulated sell profit loss'
 
         From all the operations, the following aren't computed, and an explanation is given:
-            - 'invest', balance for invest is in operation_columns_cumsum, called 'invest cumsum'.
-            - 'uninvest', balance for uninvest is in operation_columns_cumsum, called 'uninvest cumsum'.
+            - 'invest', balance for invest is in instrument_cumsum_by_operation, called 'invest cumsum'.
+            - 'uninvest', balance for uninvest is in instrument_cumsum_by_operation, called 'uninvest cumsum'.
             - 'withdraw' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
             - 'sell' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
 
@@ -672,8 +684,8 @@ class SimplePortfolioLedger:
             'avg buy total price',
             'sell profit loss',
             'accumulated sell profit loss',
-            # 'invest', balance for invest is in operation_columns_cumsum, called 'invest cumsum'
-            # 'uninvest', balance for uninvest is in operation_columns_cumsum, called 'uninvest cumsum'
+            # 'invest', balance for invest is in instrument_cumsum_by_operation, called 'invest cumsum'
+            # 'uninvest', balance for uninvest is in instrument_cumsum_by_operation, called 'uninvest cumsum'
             # 'withdraw' balance doesn't make sense because it means removing something
             # 'sell' balance doesn't make sense because it means removing something
         ]
@@ -1162,7 +1174,7 @@ class SimplePortfolioLedger:
     @classmethod
     def get_ledger_columns(cls) -> Tuple[str]:
         """Returns the columns in a ledger.
-        
+
         Returns
         -------
         List[str]
@@ -1393,7 +1405,7 @@ class SimplePortfolioLedger:
             instrument_type=False,
             instrument_name=False,
             operation_columns=False,
-            operation_columns_cumsum=False,
+            instrument_cumsum_by_operation=False,
             operation_columns_balance=False,
             thousands_fmt_sep=False,
             thousands_fmt_decimals=1,
@@ -1433,7 +1445,7 @@ class SimplePortfolioLedger:
         instrument_type: bool = False,
         instrument_name: bool = False,
         operation_columns: bool = False,
-        operation_columns_cumsum: bool = False,
+        instrument_cumsum_by_operation: bool = False,
         operation_columns_balance: bool = False,
         overwrite: bool = False,
     ):
@@ -1449,8 +1461,8 @@ class SimplePortfolioLedger:
             Wether to add a column for the instrument name. By default False.
         operation_columns : bool, optional
             Whether to add operation_columns to The Ledger. By default False.
-        operation_columns_cumsum : bool, optional
-            Whether to add operation_columns_cumsum to The Ledger. By default False.
+        instrument_cumsum_by_operation : bool, optional
+            Whether to add instrument_cumsum_by_operation to The Ledger. By default False.
         operation_columns_balance : bool, optional
             Whether to add operation_columns_balance to The Ledger. By default False.
         overwrite : bool, optional
@@ -1484,7 +1496,7 @@ class SimplePortfolioLedger:
             instrument_type=instrument_type,
             instrument_name=instrument_name,
             operation_columns=operation_columns,
-            operation_columns_cumsum=operation_columns_cumsum,
+            instrument_cumsum_by_operation=instrument_cumsum_by_operation,
             operation_columns_balance=operation_columns_balance,
         ).to_excel(
             writer,
@@ -1501,7 +1513,7 @@ class SimplePortfolioLedger:
             instrument_type=instrument_type,
             instrument_name=instrument_name,
             operation_columns=operation_columns,
-            operation_columns_cumsum=operation_columns_cumsum,
+            instrument_cumsum_by_operation=instrument_cumsum_by_operation,
             operation_columns_balance=operation_columns_balance,
         ).shape
 

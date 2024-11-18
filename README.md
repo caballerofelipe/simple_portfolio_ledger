@@ -42,7 +42,7 @@
 
 
 ## Withdrawing and selling an instrument
-- If an instrument is sold, the order from which the money is taken out is the following: [deposit, stock dividend, dividend, buy]
+- If an instrument is sold, the order from which the money is taken out is the following: [deposit, stock dividend, dividend, buy] or maybe specify when doing a `operation_columns_balance`.
 - This has the implication that when selling, depending on where the money is taken from, there is or isn't a profit/loss associated with the transaction.
 - For instance, if I have an instrument that I deposited and that I bought, let's say I have 100 shares of XYZ: 60 bough (at 10) and 40 deposited. If I sell 60 shares at 20 and I sell the deposited ones first, those deposited (40) shouldn't be accounted as profit since I deposited then, but the remaining 20 would have a 10 profit per share. If it's the other way around, I sell all 60 shares from the ones I bought, I would get a 10 profit for all 60 shares.
 
