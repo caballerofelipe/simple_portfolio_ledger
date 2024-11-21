@@ -20,7 +20,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
     ],
-    install_requires=['pandas>=2', 'numpy>=1'], # Might need review
+    install_requires=['pandas>=2', 'numpy>=1', 'pydantic>2.9'],  # Might need review
     extras_require={
         # 'dev': ['pytest>=7.0', 'twine>=4.0.2'],
         'save_load': ['pytables>=3'],

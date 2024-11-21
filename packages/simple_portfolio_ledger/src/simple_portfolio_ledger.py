@@ -4,10 +4,11 @@ import functools
 import inspect
 import pathlib
 import warnings
-from typing import List, Tuple, Callable
+from typing import Callable, List, Tuple
 
 import numpy as np
 import pandas as pd
+from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt, validate_call
 
 # Note: MARK is a functionality from Visual Studio Code to find things in the minimap.
 
@@ -17,12 +18,12 @@ class SimplePortfolioLedger:
     _ledger_columns = (
         'opid',
         'subopid',
-        'date_execution',
         'account',
-        'instrument',
-        'price_in',
+        'date_execution',
         'operation',
+        'instrument',
         'size',
+        'price_in',
         'origin',
         'destination',
         'price',
@@ -190,6 +191,7 @@ class SimplePortfolioLedger:
         extraneous_ops = used_ops - set(self._ops_names)
         return extraneous_ops
 
+    @validate_call(config={'strict': True})
     @staticmethod
     def simplify_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         """Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present.
@@ -268,22 +270,22 @@ class SimplePortfolioLedger:
             )
             the_ledger = pd.merge(the_ledger, instruments, how='left', on='instrument')
 
-        dfs_toconcat = [the_ledger]
+        dfs_to_concat = [the_ledger]
 
         if operation_columns is True:
             tmp = self.operation_columns()
-            dfs_toconcat.append(tmp)
+            dfs_to_concat.append(tmp)
         if instrument_cumsum_by_operation is True:
             tmp = self.instrument_cumsum_by_operation(all_columns=False)
-            dfs_toconcat.append(tmp)
+            dfs_to_concat.append(tmp)
         if operation_columns_balance is True:
             tmp = self.operation_columns_balance(all_columns=False)
-            dfs_toconcat.append(tmp)
+            dfs_to_concat.append(tmp)
 
         to_return = (
             pd
             # Join DataFrames
-            .concat(dfs_toconcat, join='inner', axis=1)
+            .concat(dfs_to_concat, join='inner', axis=1)
             # Convert dates to appropriate format
             .astype(
                 {
@@ -291,7 +293,7 @@ class SimplePortfolioLedger:
                     'date_order': 'datetime64[ns]',
                 }
             )
-            # Try to pass colums where dtype is object to a type like int64 or float64
+            # Try to pass columns where dtype is object to a type like int64 or float64
             .infer_objects()
         )
 
@@ -343,7 +345,7 @@ class SimplePortfolioLedger:
                     .reindex(sorted(self._ops_names), axis=1, fill_value=0)
                     # Sort by the original index
                     .sort_index()
-                    # Try to pass colums where dtype is object to a type like int64 or float64
+                    # Try to pass columns where dtype is object to a type like int64 or float64
                     .infer_objects()
                 )
 
@@ -362,7 +364,7 @@ class SimplePortfolioLedger:
 
         Useful to see the total "so far" for each account-instrument-price_in combination.
 
-        The index of the returned DataFrame is the same as the ledger but might be sorted diffeerently.
+        The index of the returned DataFrame is the same as the ledger but might be sorted differently.
 
         The operation is done by grouping operations by account-instrument-price_in, doing a cumsum for every group and returns a DataFrame with the following columns:
             - 'account' (when all_columns=True)
@@ -448,7 +450,7 @@ class SimplePortfolioLedger:
                     .apply(lambda x: x.ffill().fillna(0), include_groups=False)
                     # Move indexes `returned_columns` (created by the last groupby) to a column
                     .reset_index(returned_columns)
-                    # Create new colums
+                    # Create new columns
                     .assign(
                         # sum of all cumsum columns
                         cumsum_held=lambda x: x[ops_cumsum_names].sum(axis=1),
@@ -459,7 +461,7 @@ class SimplePortfolioLedger:
                     )
                     # Sort by the original index
                     .sort_index()
-                    # Try to pass colums where dtype is object to a type like int64 or float64
+                    # Try to pass columns where dtype is object to a type like int64 or float64
                     .infer_objects()
                 )
 
@@ -643,7 +645,7 @@ class SimplePortfolioLedger:
 
         Useful to see the balance on every row for each account-instrument-price_in combination.
 
-        The index of the returned DataFrame is the same as the ledger but might be sorted diffeerently.
+        The index of the returned DataFrame is the same as the ledger but might be sorted differently.
 
         The operation is done by grouping operations by account-instrument-price_in, doing a balance for every group and returns a DataFrame with the following columns:
             - 'account' (when all_columns=True)
@@ -725,7 +727,7 @@ class SimplePortfolioLedger:
                 .reset_index(['account', 'instrument', 'price_in'])
                 # Sort by the original index
                 .sort_index()
-                # Try to pass colums where dtype is object to a type like int64 or float64
+                # Try to pass columns where dtype is object to a type like int64 or float64
                 .infer_objects()
             )
 
@@ -800,25 +802,64 @@ class SimplePortfolioLedger:
         )
         return new_op_id, new_rows
 
+    @validate_call(config={'strict': True})
     def buy(
         self,
-        date_execution,
-        instrument,
-        price_in,
-        price,
-        size,
-        account,
-        commission=0,
-        tax=0,
-        stated_total=None,  # Used to verify if inner calculation is correct
-        date_order=None,
-        notes='',
-        commission_notes='',
-        tax_notes='',
-        tolerance_decimals=4,
+        account: str,
+        date_execution: str,
+        instrument: str,
+        size: PositiveInt | PositiveFloat,
+        price_in: str,
+        price: NonNegativeInt | NonNegativeFloat,
+        commission: NonNegativeInt | NonNegativeFloat = 0,
+        tax: NonNegativeInt | NonNegativeFloat = 0,
+        date_order: str | None = None,
+        notes: str = '',
+        commission_notes: str = '',
+        tax_notes: str = '',
+        stated_total: NonNegativeInt | NonNegativeFloat | None = None,
+        tolerance_decimals: NonNegativeInt = 4,
     ):
-        """
-        REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
+        """Creates the operations needed to process a buy.
+
+        Parameters
+        ----------
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that increases its amount by the operations.
+        size : PositiveInt | PositiveFloat
+            The amount bought.
+        price_in : str
+            The instrument used to pay for the buy.
+        price : NonNegativeInt | NonNegativeFloat
+            The current market price for the instrument.
+        commission : NonNegativeInt | NonNegativeFloat, optional
+            The amount payed to do the operation in `price_in`, by default 0.
+        tax : NonNegativeInt | NonNegativeFloat, optional
+            The amount payed in taxes in `price_in`, by default 0.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
+        notes : str, optional
+            Notes to add to the operations, by default ''.
+        commission_notes : str, optional
+            Notes about the commission to add to the operations, by default ''.
+        tax_notes : str, optional
+            Notes about the tax to add to the operations, by default ''.
+        stated_total : NonNegativeInt  |  NonNegativeFloat  |  None, optional
+            Used to verify if the inner calculation (`calculated_total = size * price + commission + tax`) is correct (`abs(stated_total - calculated_total) < 10**-tolerance_decimals`), By default None.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
+
+        Raises
+        ------
+        ValueError
+            When adding buy operation, the stated total is different from the calculated total. By more than the minimum of {10**-tolerance_decimals}.
         """
         calculated_total = size * price + commission + tax
 
@@ -889,35 +930,39 @@ class SimplePortfolioLedger:
 
         return self._add_rows(data=[op_1, op_2])
 
+    @validate_call(config={'strict': True})
     def deposit(
         self,
-        date_execution,
-        instrument,
-        amount,
-        account,
-        date_order=None,
-        notes='',
+        account: str,
+        date_execution: str,
+        instrument: str,
+        size: PositiveInt | PositiveFloat,
+        date_order: str | None = None,
+        notes: str = '',
     ):
-        """Creates a new row with a deposit.
+        """Creates the operations needed to process a deposit.
 
         Important: Deposit means a instrument entering an account. A commission or tax for a deposit is not possible, create a new operation for that purpose after doing the deposit.
 
         Parameters
         ----------
-        date_execution : _type_
-            Deposit execution date.
-        instrument : _type_
-            Deposit instrument.
-        amount : _type_
-            Deposit amount.
-        account : _type_
-            Deposit account.
-        date_order : _type_, optional
-            Deposit order date, if not set, uses `date_execution`. By default None.
-        description : str, optional
-            Deposit description. By default ''.
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that increases its size by the operations.
+        size : PositiveInt | PositiveFloat
+            The amount deposited.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
         notes : str, optional
-            Deposit notes. By default ''.
+            Notes to add to the operations, by default ''.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
         """
         op_deposit = {
             'date_execution': date_execution,
@@ -928,10 +973,10 @@ class SimplePortfolioLedger:
             'price_in': instrument,
             'price': 1,
             'price_w_expenses': 1,
-            'size': amount,
+            'size': size,
             'commission': 0,
             'tax': 0,
-            'total': amount,
+            'total': size,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Deposit {instrument}.',
             'notes': notes,
@@ -942,18 +987,48 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_deposit)
 
+    @validate_call(config={'strict': True})
     def dividend(
         self,
-        date_execution,
-        instrument_from,
-        instrument_received,
-        amount,
-        account,
-        date_order=None,
-        notes='',
+        account: str,
+        date_execution: str,
+        instrument: str,
+        total: PositiveInt | PositiveFloat,
+        origin: str,
+        date_order: str | None = None,
+        notes: str = '',
     ):
+        """Creates the operations needed to process a dividend.
+
+        Parameters
+        ----------
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that increases its amount by the operations.
+        total : PositiveInt | PositiveFloat
+            The total amount obtained by dividend.
+        origin : str
+            The instrument that originated the dividend.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
+        notes : str, optional
+            Notes to add to the operations, by default ''.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
+
+        Raises
+        ------
+        ValueError
+            'When doing operation "dividend", the calculated size of held instrument {origin} is 0. This could mean there are no previous operations for the instrument or the sum of all operations is 0. Check the ledger.'
+        """
         size = self._ledger_df.query(
-            f'instrument == "{instrument_from}" and date_execution <= "{date_execution}"'
+            f'instrument == "{origin}" and date_execution <= "{date_execution}"'
         )['size'].sum()
 
         if size == 0:
@@ -961,29 +1036,29 @@ class SimplePortfolioLedger:
                 ' '.join(
                     [
                         'When doing operation "dividend",',
-                        f'the calculated size of held instrument {instrument_from} is 0.',
+                        f'the calculated size of held instrument {origin} is 0.',
                         'This could mean there are no previous operations for the instrument',
                         'or the sum of all operations is 0. Check the ledger.',
                     ]
                 )
             )
 
-        price = amount / size
+        price = total / size
         op_dividend = {
             'date_execution': date_execution,
             'operation': 'dividend',
-            'instrument': instrument_received,
-            'origin': instrument_from,
+            'instrument': instrument,
+            'origin': origin,
             'destination': '',
-            'price_in': instrument_received,
+            'price_in': instrument,
             'price': price,
             'price_w_expenses': price,
             'size': size,
             'commission': 0,
             'tax': 0,
-            'total': amount,
+            'total': total,
             'date_order': (date_order if date_order is not None else date_execution),
-            'description': f'Dividend from {instrument_from}.',
+            'description': f'Dividend from {origin}.',
             'notes': notes,
             'commission_notes': '',
             'tax_notes': '',
@@ -992,25 +1067,66 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_dividend)
 
+    @validate_call(config={'strict': True})
     def sell(
         self,
-        date_execution,
-        instrument,
-        price_in,
-        price,
-        size,
-        account,
-        commission=0,
-        tax=0,
-        stated_total=None,  # Used to verify if inner calculation is correct
-        date_order=None,
-        notes='',
-        commission_notes='',
-        tax_notes='',
-        tolerance_decimals=4,
+        account: str,
+        date_execution: str,
+        instrument: str,
+        size: PositiveInt | PositiveFloat,
+        price_in: str,
+        price: NonNegativeInt | NonNegativeFloat,
+        commission: NonNegativeInt | NonNegativeFloat = 0,
+        tax: NonNegativeInt | NonNegativeFloat = 0,
+        date_order: str | None = None,
+        notes: str = '',
+        commission_notes: str = '',
+        tax_notes: str = '',
+        stated_total: (
+            NonNegativeInt | NonNegativeFloat
+        ) = None,  # Used to verify if inner calculation is correct
+        tolerance_decimals: NonNegativeInt = 4,
     ):
-        """
-        REMOVE BUT FORMAT LATER: All values are positive. Sign is changed inside the function.
+        """Creates the operations needed to process a sell.
+
+        Parameters
+        ----------
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that decreases its amount by the operations.
+        size : PositiveInt | PositiveFloat
+            The amount sold.
+        price_in : str
+            The instrument obtained by the sell.
+        price : NonNegativeInt | NonNegativeFloat
+            The current market price for the instrument.
+        commission : NonNegativeInt | NonNegativeFloat, optional
+            The amount payed to do the operation in `price_in`, by default 0.
+        tax : NonNegativeInt | NonNegativeFloat, optional
+            The amount payed in taxes in `price_in`, by default 0.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
+        notes : str, optional
+            Notes to add to the operations, by default ''.
+        commission_notes : str, optional
+            Notes about the commission to add to the operations, by default ''.
+        tax_notes : str, optional
+            Notes about the tax to add to the operations, by default ''.
+        stated_total : NonNegativeInt  |  NonNegativeFloat  |  None, optional
+            Used to verify if the inner calculation (`calculated_total = size * price + commission + tax`) is correct (`abs(stated_total - calculated_total) < 10**-tolerance_decimals`), By default None.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
+
+        Raises
+        ------
+        ValueError
+            'When adding sell operation, the stated total is different from the calculated total. By more than the minimum of {10**-tolerance_decimals}.'
         """
         calculated_total = size * price - commission - tax
 
@@ -1018,11 +1134,11 @@ class SimplePortfolioLedger:
         if stated_total is not None and not (
             abs(stated_total - calculated_total) < 10**-tolerance_decimals
         ):
-            error_msg = ''.join(
+            error_msg = ' '.join(
                 [
-                    'When adding sell operation, '
-                    + 'the stated total is different from the calculated total. '
-                    + f'By more than the minimum of {10**-tolerance_decimals}.'
+                    'When adding sell operation,',
+                    'the stated total is different from the calculated total.',
+                    f'By more than the minimum of {10**-tolerance_decimals}.',
                 ]
             )
             error_dict = {
@@ -1081,23 +1197,45 @@ class SimplePortfolioLedger:
 
         return self._add_rows(data=[op_1, op_2])
 
+    @validate_call(config={'strict': True})
     def stock_dividend(
         self,
-        date_execution,
-        instrument,
-        price_in,
-        size,
-        account,
-        date_order=None,
-        notes='',
+        account: str,
+        date_execution: str,
+        instrument: str,
+        size: PositiveInt | PositiveFloat,
+        date_order: str | None = None,
+        notes: str = '',
     ):
+        """Creates the operations needed to process a stock_dividend.
+
+        Parameters
+        ----------
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that increases its amount by the operations.
+        size : PositiveInt | PositiveFloat
+            The amount obtained as dividend.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
+        notes : str, optional
+            Notes to add to the operations, by default ''.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
+        """
         op_stock_dividend = {
             'date_execution': date_execution,
             'operation': 'stock dividend',
             'instrument': instrument,
             'origin': instrument,
             'destination': '',
-            'price_in': price_in,
+            'price_in': instrument,
             'price': 0,
             'price_w_expenses': 0,
             'size': size,
@@ -1114,35 +1252,39 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_stock_dividend)
 
+    @validate_call(config={'strict': True})
     def withdraw(
         self,
-        date_execution,
-        instrument,
-        amount,
-        account,
-        date_order=None,
-        notes='',
+        account: str,
+        date_execution: str,
+        instrument: str,
+        size: PositiveInt | PositiveFloat,
+        date_order: str | None = None,
+        notes: str = '',
     ):
-        """Creates a new row with a withdraw.
+        """Creates the operations needed to process a withdraw.
 
         Important: Withdraw means a instrument exiting an account. A commission or tax for a withdraw is not possible, create a new operation for that purpose after doing the withdraw.
 
         Parameters
         ----------
-        date_execution : _type_
-            Withdraw execution date.
-        instrument : _type_
-            Withdraw instrument.
-        amount : _type_
-            Withdraw amount.
-        account : _type_
-            Withdraw account.
-        date_order : _type_, optional
-            Withdraw order date, if not set, uses `date_execution`. By default None.
-        description : str, optional
-            Withdraw description. By default ''.
+        account : str
+            Account used for the operations.
+        date_execution : str
+            Date when the operations are done.
+        instrument : str
+            The instrument that decreases its size by the operations.
+        size : PositiveInt | PositiveFloat
+            The amount withdrawn.
+        date_order : str | None, optional
+            Date when the operations are ordered. By default None, in which case `date_execution` is used.
         notes : str, optional
-            Withdraw notes. By default ''.
+            Notes to add to the operations, by default ''.
+
+        Returns
+        -------
+        tuple[int, pd.DataFrame]
+            Returns a tuple of the inserted opid and the pd.DataFrame inserted.
         """
         op_withdraw = {
             'date_execution': date_execution,
@@ -1153,10 +1295,10 @@ class SimplePortfolioLedger:
             'price_in': instrument,
             'price': 1,
             'price_w_expenses': 1,
-            'size': -amount,
+            'size': -size,
             'commission': 0,
             'tax': 0,
-            'total': -amount,
+            'total': -size,
             'date_order': (date_order if date_order is not None else date_execution),
             'description': f'Withdraw {instrument}.',
             'notes': notes,
@@ -1248,12 +1390,12 @@ class SimplePortfolioLedger:
         """
         return self._instruments_metadata
 
-    def set_instruments_metadata(self, instuments_metadata: dict) -> None:
+    def set_instruments_metadata(self, instruments_metadata: dict) -> None:
         """Set instruments' metadata.
 
         Parameters
         ----------
-        instuments_metadata : dict
+        instruments_metadata : dict
             The required format is the following:
             ```json
             {instrument_name:
@@ -1269,7 +1411,7 @@ class SimplePortfolioLedger:
             }
             ```
         """
-        extraneous_instruments = set(instuments_metadata.keys()) - set(
+        extraneous_instruments = set(instruments_metadata.keys()) - set(
             self.get_present_instruments()
         )
         if len(extraneous_instruments) > 0:
@@ -1279,7 +1421,7 @@ class SimplePortfolioLedger:
                 + ' (still, storing all in the instruments metadata).',
                 stacklevel=2,
             )
-        for instr, metadata in instuments_metadata.items():
+        for instr, metadata in instruments_metadata.items():
             if not isinstance(metadata, dict):
                 continue
             namedict = {}
@@ -1334,7 +1476,7 @@ class SimplePortfolioLedger:
         """
         instruments_set = set([*self.get_present_instruments(), *self._instruments_metadata.keys()])
 
-        dfs_toconcat = [pd.DataFrame(instruments_set, columns=['instrument'])]
+        dfs_to_concat = [pd.DataFrame(instruments_set, columns=['instrument'])]
 
         if instrument_type is True:
             rows_types = []
@@ -1342,7 +1484,7 @@ class SimplePortfolioLedger:
                 metadata = self._instruments_metadata.get(instr)
                 instr_type = metadata.get('type', '') if isinstance(metadata, dict) else ''
                 rows_types.append([instr_type])
-            dfs_toconcat.append(pd.DataFrame(rows_types, columns=['instrument_type']))
+            dfs_to_concat.append(pd.DataFrame(rows_types, columns=['instrument_type']))
 
         if instrument_name is True:
             rows_names = []
@@ -1350,7 +1492,7 @@ class SimplePortfolioLedger:
                 metadata = self._instruments_metadata.get(instr)
                 instr_name = metadata.get('name', '') if isinstance(metadata, dict) else ''
                 rows_names.append([instr_name])
-            dfs_toconcat.append(pd.DataFrame(rows_names, columns=['instrument_name']))
+            dfs_to_concat.append(pd.DataFrame(rows_names, columns=['instrument_name']))
 
         if instrument_in_ledger is True:
             extraneous_instruments = set(self._instruments_metadata.keys()) - set(
@@ -1360,10 +1502,10 @@ class SimplePortfolioLedger:
             for instr in instruments_set:
                 is_extraneous = False if instr in extraneous_instruments else True
                 rows_extraneous.append([is_extraneous])
-            dfs_toconcat.append(pd.DataFrame(rows_extraneous, columns=['in_ledger']))
+            dfs_to_concat.append(pd.DataFrame(rows_extraneous, columns=['in_ledger']))
 
         to_return = (
-            pd.concat(dfs_toconcat, join='inner', axis=1)
+            pd.concat(dfs_to_concat, join='inner', axis=1)
             .sort_values('instrument')
             .reset_index(drop=True)
         )

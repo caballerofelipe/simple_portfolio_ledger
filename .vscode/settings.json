@@ -8,7 +8,7 @@
         // "--disable=C0116", // Missing Function Docstring
     ],
     // ↓ Change to "Hint" to not show spell checker in problems
-    "cSpell.diagnosticLevel": "Information",
+    "cSpell.diagnosticLevel": "Hint",
     "black-formatter.args": [
         "--skip-string-normalization",
         "--line-length=100"
@@ -18,5 +18,28 @@
     },
     "autoDocstring": {
         "docstringFormat": "numpy"
-    }
+    },
+    "cSpell.words": [
+        "autofilter",
+        "autofit",
+        "Classmethods",
+        "complevel",
+        "complib",
+        "cumsum",
+        "downcasting",
+        "dtypes",
+        "ffill",
+        "fillna",
+        "isna",
+        "iterrows",
+        "namedict",
+        "ndarray",
+        "opid",
+        "pytables",
+        "storer",
+        "subopid",
+        "typedict",
+        "uninvest",
+        "whatis"
+    ]
 }

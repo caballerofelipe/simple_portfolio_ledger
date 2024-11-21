@@ -6,6 +6,13 @@
 	1. a rule should be implemented to take an instrument out depending on rules: for instance LIFO, FIFO or a specific sequence. For instance FIFO would take from the first group that has the same instrument and that has a positive amount. This would only happen if no *price_in* is specified, if price_in is specified the taken instrument should be the whole specified group *account-instrument-price_in*. The rule would be stated when creating the SPL. In case a history is implemented (see Ideas for the Future), maybe this could be changed when doing a replay. When doing FIFO/LIFO, if there is more taken out than from one group, pass to the next one.
 	2. *sell* and *withdraw* needs to specify the complete group *account-instrument-price_in*.
 	3. When doing *sell* and *withdraw* you specify which group to take from. Similar to doing a FIFO and LIFO, but specified for each operation.
+	- Possible approaches:
+		- **LIFO**
+		- **FIFO**
+		- **max_first**: take from the one that has the most first
+		- **min_first**: take from the one that has the least first
+		- **from_price_in**: specify where to take the money from, if insufficient, raise exception. Maybe this could be an ordered list to take from different places in a given order. If a single place is specified take only from there and raise exception if insufficient.
+		- **list**: specify sequence manually (maybe by a list stating the order from where to take)
 - (Not critical per se but is very similar to previous task, will do it right after) Create operation_list, operation_cumsum, operation_balance.
 	- Or maybe where ini and end are dates
 		- asset_operations(ini, end, account, instrument, price_in)
@@ -38,13 +45,18 @@
 - origin/destination/allocation
 	- Possibly, origin and destination should always be filled. For instance in a sell operation, origin for the sell part would be the instrument itself.
 	- Maybe there could be a column to state if an operations is just changing allocation, extracting or inserting into portfolio. Or maybe there should be an equivalence table to figure this out without having it on the ledger.
-- **Tolerance**: Should the tolerance_decimals be set on a ledger level or operation level.
-	- Maybe bring back a column 'Q_price_commission_tax_verification' with a different name and a different purpose. The column was removed to show where there were inconsistencies between a calculated and stated total, now that's not possible since an error is raised if such an inconsistency occurs if the `tolerance_decimals=4,` is surpassed. But since we are now using a tolerance setting to allow small inconsistencies, maybe a new column would be useful to showcase that small inconsistency.
-	- Maybe `tolerance_decimals` should be called differently to allow inconsistencies of more than decimals, let's say 100 for instance.
+- **Tolerance**
+	- Should tolerance allow more than decimals, also units?
+	- Should the tolerance_decimals be set on a ledger level or operation level.
+		- Maybe bring back a column 'Q_price_commission_tax_verification' with a different name and a different purpose. The column was removed to show where there were inconsistencies between a calculated and stated total, now that's not possible since an error is raised if such an inconsistency occurs if the `tolerance_decimals=4,` is surpassed. But since we are now using a tolerance setting to allow small inconsistencies, maybe a new column would be useful to showcase that small inconsistency.
+		- Maybe `tolerance_decimals` should be called differently to allow inconsistencies of more than decimals, let's say 100 for instance.
 
 ## Operations review
+- Review requirements for operations:
+	- Buy, there must be enough of price_in instrument to buy the current instrument
 - Deposit/withdraw
-    - If there's a cost it should be stated as another operation
+    - If there's a cost it should be stated as another operation.
+	    - Maybe the operator-method could create multiple operations, where one is a cost.
     - No commission/tax, add another op for that
     - Only an amount should be deposited or withdrew
 - Add operations:
