@@ -1,5 +1,6 @@
 '''A simple ledger to keep track of a Portfolio's movements.'''
 
+import datetime
 import functools
 import inspect
 import pathlib
@@ -77,7 +78,7 @@ class SimplePortfolioLedger:
             'dividend',
             'invest',
             'sell',
-            'stock dividend',
+            'stock_dividend',
             'uninvest',
             'withdraw',
         )
@@ -191,8 +192,8 @@ class SimplePortfolioLedger:
         extraneous_ops = used_ops - set(self._ops_names)
         return extraneous_ops
 
-    @validate_call(config={'strict': True})
     @staticmethod
+    @validate_call(config={'arbitrary_types_allowed': True})
     def simplify_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         """Allows to simplify dtypes, for instance, pass from float64 to int64 if no decimals are present.
 
@@ -495,7 +496,7 @@ class SimplePortfolioLedger:
 
         # float('nan') is similar to np.nan, could check with np.isnan
         #  np.isnan(float('nan')) is True
-        df['avg buy total price'] = float('nan')
+        df['avg_buy_total_price'] = float('nan')
 
         # Cols to pass from previous row to current
         cols_to_copy = [col for col in new_columns if 'balance' in col]
@@ -517,26 +518,26 @@ class SimplePortfolioLedger:
             # `info['operation'] == 'invest'` and `info['operation'] == 'uninvest'`
 
             if info['operation'] == 'deposit':
-                df.loc[idx, 'balance deposit'] = (
-                    df.loc[prev_idx, 'balance deposit'] + df.loc[idx, 'size']
+                df.loc[idx, 'balance_deposit'] = (
+                    df.loc[prev_idx, 'balance_deposit'] + df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'buy':
-                df.loc[idx, 'balance buy'] = df.loc[prev_idx, 'balance buy'] + df.loc[idx, 'size']
-                df.loc[idx, 'balance buy total payed'] = (
-                    df.loc[prev_idx, 'balance buy total payed'] + df.loc[idx, 'total']
+                df.loc[idx, 'balance_buy'] = df.loc[prev_idx, 'balance_buy'] + df.loc[idx, 'size']
+                df.loc[idx, 'balance_buy_total_payed'] = (
+                    df.loc[prev_idx, 'balance_buy_total_payed'] + df.loc[idx, 'total']
                 )
-                # df.loc[idx, 'avg buy total price'] will be computed at the end
+                # df.loc[idx, 'avg_buy_total_price'] will be computed at the end
                 #  of each iteration of this for
 
             elif info['operation'] == 'dividend':
-                df.loc[idx, 'balance dividend'] = (
-                    df.loc[prev_idx, 'balance dividend'] + df.loc[idx, 'size']
+                df.loc[idx, 'balance_dividend'] = (
+                    df.loc[prev_idx, 'balance_dividend'] + df.loc[idx, 'size']
                 )
 
-            elif info['operation'] == 'stock dividend':
-                df.loc[idx, 'balance stock dividend'] = (
-                    df.loc[prev_idx, 'balance stock dividend'] + df.loc[idx, 'size']
+            elif info['operation'] == 'stock_dividend':
+                df.loc[idx, 'balance_stock_dividend'] = (
+                    df.loc[prev_idx, 'balance_stock_dividend'] + df.loc[idx, 'size']
                 )
 
             elif info['operation'] == 'withdraw':
@@ -545,38 +546,38 @@ class SimplePortfolioLedger:
                 # withdraw is negative, use absolute
                 withdrew = abs(df.loc[idx, 'size'])
 
-                if withdrew > 0 and df.loc[prev_idx, 'balance deposit'] > 0:
-                    if withdrew > df.loc[prev_idx, 'balance deposit']:
-                        withdrew = withdrew - df.loc[prev_idx, 'balance deposit']
-                        df.loc[idx, 'balance deposit'] = 0
+                if withdrew > 0 and df.loc[prev_idx, 'balance_deposit'] > 0:
+                    if withdrew > df.loc[prev_idx, 'balance_deposit']:
+                        withdrew = withdrew - df.loc[prev_idx, 'balance_deposit']
+                        df.loc[idx, 'balance_deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] = (
-                            df.loc[prev_idx, 'balance deposit'] - withdrew
+                        df.loc[idx, 'balance_deposit'] = (
+                            df.loc[prev_idx, 'balance_deposit'] - withdrew
                         )
                         withdrew = 0
-                if withdrew > 0 and df.loc[prev_idx, 'balance stock dividend'] > 0:
-                    if withdrew > df.loc[prev_idx, 'balance stock dividend']:
-                        withdrew = withdrew - df.loc[prev_idx, 'balance stock dividend']
-                        df.loc[idx, 'balance stock dividend'] = 0
+                if withdrew > 0 and df.loc[prev_idx, 'balance_stock_dividend'] > 0:
+                    if withdrew > df.loc[prev_idx, 'balance_stock_dividend']:
+                        withdrew = withdrew - df.loc[prev_idx, 'balance_stock_dividend']
+                        df.loc[idx, 'balance_stock_dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] = (
-                            df.loc[prev_idx, 'balance stock dividend'] - withdrew
+                        df.loc[idx, 'balance_stock_dividend'] = (
+                            df.loc[prev_idx, 'balance_stock_dividend'] - withdrew
                         )
                         withdrew = 0
-                if withdrew > 0 and df.loc[prev_idx, 'balance dividend'] > 0:
-                    if withdrew > df.loc[prev_idx, 'balance dividend']:
-                        withdrew = withdrew - df.loc[prev_idx, 'balance dividend']
-                        df.loc[idx, 'balance dividend'] = 0
+                if withdrew > 0 and df.loc[prev_idx, 'balance_dividend'] > 0:
+                    if withdrew > df.loc[prev_idx, 'balance_dividend']:
+                        withdrew = withdrew - df.loc[prev_idx, 'balance_dividend']
+                        df.loc[idx, 'balance_dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] = (
-                            df.loc[prev_idx, 'balance dividend'] - withdrew
+                        df.loc[idx, 'balance_dividend'] = (
+                            df.loc[prev_idx, 'balance_dividend'] - withdrew
                         )
                         withdrew = 0
                 if withdrew > 0:
-                    df.loc[idx, 'balance buy'] = df.loc[prev_idx, 'balance buy'] - withdrew
-                    df.loc[idx, 'balance buy total payed'] = (
-                        df.loc[prev_idx, 'balance buy total payed']
-                        - withdrew * df.loc[prev_idx, 'avg buy total price']
+                    df.loc[idx, 'balance_buy'] = df.loc[prev_idx, 'balance_buy'] - withdrew
+                    df.loc[idx, 'balance_buy_total_payed'] = (
+                        df.loc[prev_idx, 'balance_buy_total_payed']
+                        - withdrew * df.loc[prev_idx, 'avg_buy_total_price']
                     )
 
             elif info['operation'] == 'sell':
@@ -585,57 +586,57 @@ class SimplePortfolioLedger:
                 # sell is negative, use absolute
                 sold = abs(df.loc[idx, 'size'])
 
-                if sold > 0 and df.loc[prev_idx, 'balance deposit'] > 0:
-                    if sold > df.loc[prev_idx, 'balance deposit']:
-                        sold = sold - df.loc[prev_idx, 'balance deposit']
-                        df.loc[idx, 'balance deposit'] = 0
+                if sold > 0 and df.loc[prev_idx, 'balance_deposit'] > 0:
+                    if sold > df.loc[prev_idx, 'balance_deposit']:
+                        sold = sold - df.loc[prev_idx, 'balance_deposit']
+                        df.loc[idx, 'balance_deposit'] = 0
                     else:
-                        df.loc[idx, 'balance deposit'] = df.loc[prev_idx, 'balance deposit'] - sold
+                        df.loc[idx, 'balance_deposit'] = df.loc[prev_idx, 'balance_deposit'] - sold
                         sold = 0
-                if sold > 0 and df.loc[prev_idx, 'balance stock dividend'] > 0:
-                    if sold > df.loc[prev_idx, 'balance stock dividend']:
-                        sold = sold - df.loc[prev_idx, 'balance stock dividend']
-                        df.loc[idx, 'balance stock dividend'] = 0
+                if sold > 0 and df.loc[prev_idx, 'balance_stock_dividend'] > 0:
+                    if sold > df.loc[prev_idx, 'balance_stock_dividend']:
+                        sold = sold - df.loc[prev_idx, 'balance_stock_dividend']
+                        df.loc[idx, 'balance_stock_dividend'] = 0
                     else:
-                        df.loc[idx, 'balance stock dividend'] = (
-                            df.loc[prev_idx, 'balance stock dividend'] - sold
+                        df.loc[idx, 'balance_stock_dividend'] = (
+                            df.loc[prev_idx, 'balance_stock_dividend'] - sold
                         )
                         sold = 0
-                if sold > 0 and df.loc[prev_idx, 'balance dividend'] > 0:
-                    if sold > df.loc[prev_idx, 'balance dividend']:
-                        sold = sold - df.loc[prev_idx, 'balance dividend']
-                        df.loc[idx, 'balance dividend'] = 0
+                if sold > 0 and df.loc[prev_idx, 'balance_dividend'] > 0:
+                    if sold > df.loc[prev_idx, 'balance_dividend']:
+                        sold = sold - df.loc[prev_idx, 'balance_dividend']
+                        df.loc[idx, 'balance_dividend'] = 0
                     else:
-                        df.loc[idx, 'balance dividend'] = (
-                            df.loc[prev_idx, 'balance dividend'] - sold
+                        df.loc[idx, 'balance_dividend'] = (
+                            df.loc[prev_idx, 'balance_dividend'] - sold
                         )
                         sold = 0
                 if sold > 0:
-                    df.loc[idx, 'balance buy'] = df.loc[prev_idx, 'balance buy'] - sold
-                    df.loc[idx, 'balance buy total payed'] = (
-                        df.loc[prev_idx, 'balance buy total payed']
-                        - sold * df.loc[prev_idx, 'avg buy total price']
+                    df.loc[idx, 'balance_buy'] = df.loc[prev_idx, 'balance_buy'] - sold
+                    df.loc[idx, 'balance_buy_total_payed'] = (
+                        df.loc[prev_idx, 'balance_buy_total_payed']
+                        - sold * df.loc[prev_idx, 'avg_buy_total_price']
                     )
 
                     # Compute profit or loss
                     profit_loss = (
                         sold * df.loc[idx, 'price_w_expenses']
-                        - sold * df.loc[prev_idx, 'avg buy total price']
+                        - sold * df.loc[prev_idx, 'avg_buy_total_price']
                     )
-                    df.loc[idx, 'sell profit loss'] = profit_loss
+                    df.loc[idx, 'sell_profit_loss'] = profit_loss
 
-            # Column 'avg buy total price' is set to float('nan') before the for loop
-            #  doing `df['avg buy total price'] = float('nan')`
+            # Column 'avg_buy_total_price' is set to float('nan') before the for loop
+            #  doing `df['avg_buy_total_price'] = float('nan')`
             #  so only those rows where float('nan') should change are set using this
-            if df.loc[idx, 'balance buy'] != 0:
-                df.loc[idx, 'avg buy total price'] = (
-                    df.loc[idx, 'balance buy total payed'] / df.loc[idx, 'balance buy']
+            if df.loc[idx, 'balance_buy'] != 0:
+                df.loc[idx, 'avg_buy_total_price'] = (
+                    df.loc[idx, 'balance_buy_total_payed'] / df.loc[idx, 'balance_buy']
                 )
 
             prev_idx = idx  # Keep track of last id for next iteration
 
-        # Compute 'accumulated sell profit loss'
-        df['accumulated sell profit loss'] = df['sell profit loss'].cumsum()
+        # Compute 'accumulated_sell_profit_loss'
+        df['accumulated_sell_profit_loss'] = df['sell_profit_loss'].cumsum()
 
         return df
 
@@ -651,20 +652,20 @@ class SimplePortfolioLedger:
             - 'account' (when all_columns=True)
             - 'instrument' (when all_columns=True)
             - 'price_in' (when all_columns=True)
-            - 'balance deposit',
-            - 'balance dividend',
-            - 'balance stock dividend',
-            - 'balance buy',
-            - 'balance buy total payed',  # Amount used to buy an instrument
-            - 'avg buy total price',
-            - 'sell profit loss',
-            - 'accumulated sell profit loss'
+            - 'balance_deposit',
+            - 'balance_dividend',
+            - 'balance_stock_dividend',
+            - 'balance_buy',
+            - 'balance_buy_total_payed',  # Amount used to buy an instrument
+            - 'avg_buy_total_price',
+            - 'sell_profit_loss',
+            - 'accumulated_sell_profit_loss'
 
         From all the operations, the following aren't computed, and an explanation is given:
             - 'invest', balance for invest is in instrument_cumsum_by_operation, called 'invest cumsum'.
             - 'uninvest', balance for uninvest is in instrument_cumsum_by_operation, called 'uninvest cumsum'.
-            - 'withdraw' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
-            - 'sell' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance deposit', 'balance stock dividend', 'balance dividend', 'balance buy'.
+            - 'withdraw' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance_deposit', 'balance_stock_dividend', 'balance_dividend', 'balance_buy'.
+            - 'sell' balance doesn't make sense because it means removing something, it is incorporated into one of 'balance_deposit', 'balance_stock_dividend', 'balance_dividend', 'balance_buy'.
 
         Parameters
         ----------
@@ -678,14 +679,14 @@ class SimplePortfolioLedger:
         """
 
         new_columns = [
-            'balance deposit',
-            'balance dividend',
-            'balance stock dividend',
-            'balance buy',
-            'balance buy total payed',  # Amount used to buy an instrument
-            'avg buy total price',
-            'sell profit loss',
-            'accumulated sell profit loss',
+            'balance_deposit',
+            'balance_dividend',
+            'balance_stock_dividend',
+            'balance_buy',
+            'balance_buy_total_payed',  # Amount used to buy an instrument
+            'avg_buy_total_price',
+            'sell_profit_loss',
+            'accumulated_sell_profit_loss',
             # 'invest', balance for invest is in instrument_cumsum_by_operation, called 'invest cumsum'
             # 'uninvest', balance for uninvest is in instrument_cumsum_by_operation, called 'uninvest cumsum'
             # 'withdraw' balance doesn't make sense because it means removing something
@@ -714,7 +715,7 @@ class SimplePortfolioLedger:
             #    `self._operation_columns_balance_for_group` so
             #    --> DON'T do `.reindex(new_columns, axis=1, fill_value=pd.NA)`
             # - Do not fill na with 0, as this will overwrite the expected
-            #    behavior for column 'avg buy total price', which is sometimes nan
+            #    behavior for column 'avg_buy_total_price', which is sometimes nan
             #    when it isn't calculable, so
             #    --> DON'T do `.fillna(0)`
             to_return = (
@@ -802,18 +803,18 @@ class SimplePortfolioLedger:
         )
         return new_op_id, new_rows
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def buy(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         size: PositiveInt | PositiveFloat,
         price_in: str,
         price: NonNegativeInt | NonNegativeFloat,
         commission: NonNegativeInt | NonNegativeFloat = 0,
         tax: NonNegativeInt | NonNegativeFloat = 0,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
         commission_notes: str = '',
         tax_notes: str = '',
@@ -930,14 +931,14 @@ class SimplePortfolioLedger:
 
         return self._add_rows(data=[op_1, op_2])
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def deposit(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         size: PositiveInt | PositiveFloat,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
     ):
         """Creates the operations needed to process a deposit.
@@ -987,15 +988,15 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_deposit)
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def dividend(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         total: PositiveInt | PositiveFloat,
         origin: str,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
     ):
         """Creates the operations needed to process a dividend.
@@ -1067,24 +1068,22 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_dividend)
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def sell(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         size: PositiveInt | PositiveFloat,
         price_in: str,
         price: NonNegativeInt | NonNegativeFloat,
         commission: NonNegativeInt | NonNegativeFloat = 0,
         tax: NonNegativeInt | NonNegativeFloat = 0,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
         commission_notes: str = '',
         tax_notes: str = '',
-        stated_total: (
-            NonNegativeInt | NonNegativeFloat
-        ) = None,  # Used to verify if inner calculation is correct
+        stated_total: NonNegativeInt | NonNegativeFloat | None = None,
         tolerance_decimals: NonNegativeInt = 4,
     ):
         """Creates the operations needed to process a sell.
@@ -1197,14 +1196,14 @@ class SimplePortfolioLedger:
 
         return self._add_rows(data=[op_1, op_2])
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def stock_dividend(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         size: PositiveInt | PositiveFloat,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
     ):
         """Creates the operations needed to process a stock_dividend.
@@ -1231,7 +1230,7 @@ class SimplePortfolioLedger:
         """
         op_stock_dividend = {
             'date_execution': date_execution,
-            'operation': 'stock dividend',
+            'operation': 'stock_dividend',
             'instrument': instrument,
             'origin': instrument,
             'destination': '',
@@ -1252,14 +1251,14 @@ class SimplePortfolioLedger:
 
         return self._add_rows(op_stock_dividend)
 
-    @validate_call(config={'strict': True})
+    @validate_call(config={'arbitrary_types_allowed': True})
     def withdraw(
         self,
         account: str,
-        date_execution: str,
+        date_execution: datetime.datetime,
         instrument: str,
         size: PositiveInt | PositiveFloat,
-        date_order: str | None = None,
+        date_order: datetime.datetime | None = None,
         notes: str = '',
     ):
         """Creates the operations needed to process a withdraw.
@@ -1660,7 +1659,8 @@ class SimplePortfolioLedger:
         ).shape
 
         # Set the autofilter.
-        worksheet.autofilter(0, 1, max_row, max_col)
+        # TODO: Untested, to add a filter to the first column
+        worksheet.autofilter(0, 0, max_row, max_col)
 
         # From https://xlsxwriter.readthedocs.io/example_panes.html
         worksheet.freeze_panes(1, 8 + add_if_show_index)

@@ -40,6 +40,7 @@
 - Maybe the description column is redundant and the name of the operation is enough. Or maybe be more explicit in the description, instead of 'Buy {instrument}' it could be 'Buy X {instrument} in exchange for Y {price_in}' where X and Y are amounts.
 - Maybe add a description to metadata? (I.e. what does a given instrument represent. E.g.: FSTFX is called "Fidelity Limited Term Municipal Income Fund" but from that name I don't necessarily know what that instrument is so a small description could be added to the metadata {a part from name and type} to allow easier instrument tracking).
 - Maybe the operation column in the ledger should be called differently, perhaps action. The reason being that operations might be the things that are done via the API and they might have two events happening such as sell (selling and univesting).
+- Maybe add a column type to those that we are definitely sure (dates/str).
 
 ### Undecided
 - origin/destination/allocation
@@ -68,11 +69,11 @@
 	- pay_tax
 	- pay_transfer
 	- account_cost
+- Maybe date information should set timezone if not specified when operator-methods were called.
 
 ## Logic review
 - Validation
-	- All operations should use positive numbers and raise exceptions if it's not the case. Maybe do it in add_rows.
-	- Add validation for _add_rows
+	- Maybe add validation for _add_rows.
 - Verify before operations if it's possible to do it. For instance
     - Sell only what I have and nothing more.
     - Invest only what I have and nothing more.
